@@ -168,15 +168,16 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function syncSa(){ let best=null,bd=1e9; [...saSel.options].forEach(o=>{ const d=Math.abs(Math.log2(o.value/S.saHz)); if(d<bd){bd=d;best=o;} }); if(best) saSel.value=best.value; $('saHz').value=S.saHz.toFixed(1); }
   saSel.addEventListener('change',()=>{ S.saHz=+saSel.value; save(); syncSa(); });
   $('saHz').addEventListener('change',()=>{ const v=+$('saHz').value; if(v>=60&&v<=600){ S.saHz=v; save(); syncSa(); } });
-  lehraSel.addEventListener('change',()=>{ const was=playing; if(was) stop(); S.lehra=lehraSel.value; save(); renderTaal(); renderNotes(); if(was) start(); });
+  lehraSel.addEventListener('change',()=>{ S.lehra=lehraSel.value; save(); renderTaal(); renderNotes(); if(playing){ flushFuture(); nextIdx=0; nextTime=ctx.currentTime+0.03; schedule(); mediaSession(); } });
   $('bpm').value=S.bpm; $('bpmV').textContent=S.bpm;
-  $('bpm').addEventListener('input',()=>{ S.bpm=+$('bpm').value; $('bpmV').textContent=S.bpm; $('layaName').textContent=S.bpm<60?'vilambit':(S.bpm<120?'madhya':'drut'); save(); });
+  function retime(){ if(!playing||!ctx) return; const now=ctx.currentTime; const playingNow=sched.length?sched[sched.length-1]:null; flushFuture(); const last=sched.length?sched[sched.length-1]:null; if(last){ const T=taal(); nextIdx=(last.a-1)*T.n+last.m; nextTime=Math.max(now+0.02, last.t+60/S.bpm); } else { nextTime=now+0.03; } schedule(); }
+  $('bpm').addEventListener('input',()=>{ S.bpm=+$('bpm').value; $('bpmV').textContent=S.bpm; $('layaName').textContent=S.bpm<60?'vilambit':(S.bpm<120?'madhya':'drut'); save(); retime(); });
   $('layaName').textContent=S.bpm<60?'vilambit':(S.bpm<120?'madhya':'drut');
-  $('clickSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.clicks=b.dataset.c; save(); [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+  $('clickSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.clicks=b.dataset.c; save(); [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); retime(); });
   [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x.dataset.c===S.clicks));
   $('droneChk').checked=S.drone; $('highChk').checked=S.high;
   $('droneChk').addEventListener('change',e=>{ S.drone=e.target.checked; save(); if(playing){ S.drone?startDrone():stopDrone(); } });
-  $('highChk').addEventListener('change',e=>{ S.high=e.target.checked; save(); });
+  $('highChk').addEventListener('change',e=>{ S.high=e.target.checked; save(); retime(); });
 
   function renderTaal(){
     const T=taal(), el=$('taal'); el.innerHTML=''; let m=0;
@@ -194,7 +195,9 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   }
 
   // audio
-  let outDest=null, wakeLock=null, bank=null;
+  let outDest=null, wakeLock=null, bank=null, live=[];
+  function track(node,t0){ live.push({n:node,t:t0}); if(live.length>400) live.splice(0,live.length-400); }
+  function flushFuture(){ if(!ctx) return; const now=ctx.currentTime; live.forEach(x=>{ if(x.t>now-0.01){ try{ x.n.stop(now); }catch(e){} } }); live=live.filter(x=>x.t<=now-0.01); sched=sched.filter(x=>x.t<=now+0.02); }
   let ctx=null, master=null, reedWave=null, stringWave=null, playing=false, timer=null, nextTime=0, nextIdx=0, avart=0, sched=[];
   let droneOn=false, droneTimer=null, droneGain=null;
   function ensureCtx(){
@@ -216,7 +219,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       const b=bank.buffers[idx]; if(b){
         const src=ctx.createBufferSource(); src.buffer=b; src.playbackRate.value=rate; src.loop=true; src.loopStart=Math.min(0.3,b.duration*0.3); src.loopEnd=Math.min(1.45,b.duration*0.9);
         const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.9,t+0.03); g.gain.setValueAtTime(0.9,t+dur-0.06); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-        src.connect(g); g.connect(master); src.start(t); src.stop(t+dur+0.02); return;
+        src.connect(g); g.connect(master); src.start(t); src.stop(t+dur+0.02); track(src,t); return;
       }
     }
     const base=S.saHz*(S.high?4:2); const f0=base*Math.pow(2,semi/12);
@@ -224,7 +227,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     const o2=ctx.createOscillator(); o2.setPeriodicWave(reedWave); o2.frequency.value=f0*1.003;
     const fl=ctx.createBiquadFilter(); fl.type='lowpass'; fl.frequency.value=Math.min(f0*8,6000);
     const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.04); g.gain.setValueAtTime(vol,t+dur-0.06); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(master); o.start(t); o2.start(t); o.stop(t+dur+0.02); o2.stop(t+dur+0.02);
+    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(master); o.start(t); o2.start(t); o.stop(t+dur+0.02); o2.stop(t+dur+0.02); track(o,t); track(o2,t);
   }
   function b64buf(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u.buffer; }
   async function loadBank(){
@@ -240,14 +243,14 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function click(t,strong){
     const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(strong?1400:1000,t); o.frequency.exponentialRampToValueAtTime(strong?700:500,t+0.04);
     const g=ctx.createGain(); g.gain.setValueAtTime(strong?0.35:0.15,t); g.gain.exponentialRampToValueAtTime(0.0001,t+(strong?0.09:0.05));
-    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.1);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.1); track(o,t);
   }
   function isTali(m){ const T=taal(); let s=1; for(let i=0;i<T.vib.length;i++){ if(m===s) return T.marks[i]!=='0'; s+=T.vib[i]; } return false; }
   function isVibStart(m){ const T=taal(); let s=1; for(let i=0;i<T.vib.length;i++){ if(m===s) return true; s+=T.vib[i]; } return false; }
 
   function schedule(){
     const L=cur(), T=taal(), toks=L.notes.split(/\s+/), beat=60/S.bpm;
-    while(nextTime<ctx.currentTime+3.0){
+    while(nextTime<ctx.currentTime+1.6){
       const m=(nextIdx%T.n)+1;
       let semi=parse(toks[nextIdx%T.n]);
       let hold=1; if(semi!==null){ for(let k=1;k<T.n;k++){ if(toks[(nextIdx+k)%T.n]==='-') hold++; else break; } reed(semi,nextTime,beat*hold*0.98,0.22); }
@@ -266,8 +269,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       document.querySelectorAll('.taal .m').forEach(c=>c.classList.toggle('on',+c.dataset.m===s.m));
       $('matraV').textContent=s.m; $('avartV').textContent=s.a; }
   }
-  function start(){ ensureCtx(); playing=true; nextTime=ctx.currentTime+0.1; nextIdx=0; sched=[]; timer=setInterval(schedule,400); schedule(); if(S.drone) startDrone(); $('playBtn').textContent='Stop'; cancelAnimationFrame(raf); tick(); keepAwake(true); mediaSession(); }
-  function stop(){ playing=false; clearInterval(timer); stopDrone(); keepAwake(false); $('playBtn').textContent='Start'; cancelAnimationFrame(raf); document.querySelectorAll('.taal .m').forEach(c=>c.classList.remove('on')); $('matraV').textContent='1'; $('avartV').textContent='0'; }
+  function start(){ ensureCtx(); playing=true; nextTime=ctx.currentTime+0.03; nextIdx=0; sched=[]; live=[]; timer=setInterval(schedule,200); schedule(); if(S.drone) startDrone(); $('playBtn').textContent='Stop'; cancelAnimationFrame(raf); tick(); keepAwake(true); mediaSession(); }
+  function stop(){ playing=false; clearInterval(timer); flushFuture(); stopDrone(); keepAwake(false); $('playBtn').textContent='Start'; cancelAnimationFrame(raf); document.querySelectorAll('.taal .m').forEach(c=>c.classList.remove('on')); $('matraV').textContent='1'; $('avartV').textContent='0'; }
   $('playBtn').addEventListener('click',()=> playing?stop():start());
 
   async function keepAwake(on){
@@ -287,7 +290,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     }catch(e){}
   }
   let taps=[];
-  $('tapBtn').addEventListener('click',()=>{ const t=performance.now(); taps=taps.filter(x=>t-x<3000); taps.push(t); if(taps.length>=3){ const iv=(taps[taps.length-1]-taps[0])/(taps.length-1); const b=Math.round(60000/iv); if(b>=30&&b<=240){ S.bpm=b; $('bpm').value=b; $('bpmV').textContent=b; $('layaName').textContent=b<60?'vilambit':(b<120?'madhya':'drut'); save(); } } });
+  $('tapBtn').addEventListener('click',()=>{ const t=performance.now(); taps=taps.filter(x=>t-x<3000); taps.push(t); if(taps.length>=3){ const iv=(taps[taps.length-1]-taps[0])/(taps.length-1); const b=Math.round(60000/iv); if(b>=30&&b<=240){ S.bpm=b; $('bpm').value=b; $('bpmV').textContent=b; $('layaName').textContent=b<60?'vilambit':(b<120?'madhya':'drut'); save(); retime(); } } });
 
   syncSa(); renderTaal(); renderNotes();
 })();
