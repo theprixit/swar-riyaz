@@ -205,7 +205,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function ensureCtx(){
     if(ctx){ if(ctx.state==='suspended') ctx.resume(); return ctx; }
     ctx=new (window.AudioContext||window.webkitAudioContext)();
-    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.ratio.value=3; comp.attack.value=0.01; comp.release.value=0.25; master.connect(comp); voice=ctx.createGain(); voice.gain.value=1; const tone=ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=5200; tone.Q.value=0.5; voice.connect(tone); tone.connect(master); const dly=ctx.createDelay(0.1); dly.delayTime.value=0.028; const dg=ctx.createGain(); dg.gain.value=0.16; const df=ctx.createBiquadFilter(); df.type='lowpass'; df.frequency.value=2500; tone.connect(dly); dly.connect(df); df.connect(dg); dg.connect(master); outDest=ctx.createMediaStreamDestination(); comp.connect(outDest); const au=$('bgAudio'); au.srcObject=outDest.stream; au.play().catch(()=>{ comp.connect(ctx.destination); });
+    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-4; comp.knee.value=6; comp.ratio.value=6; comp.attack.value=0.003; comp.release.value=0.12; master.connect(comp); voice=ctx.createGain(); voice.gain.value=1; const tone=ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=5200; tone.Q.value=0.5; voice.connect(tone); tone.connect(master); const dly=ctx.createDelay(0.1); dly.delayTime.value=0.028; const dg=ctx.createGain(); dg.gain.value=0.10; const df=ctx.createBiquadFilter(); df.type='lowpass'; df.frequency.value=2500; tone.connect(dly); dly.connect(df); df.connect(dg); dg.connect(master); outDest=ctx.createMediaStreamDestination(); comp.connect(outDest); const au=$('bgAudio'); au.srcObject=outDest.stream; au.play().catch(()=>{ comp.connect(ctx.destination); });
     const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15); reedWave=ctx.createPeriodicWave(re,im);
     const m=24, re2=new Float32Array(m), im2=new Float32Array(m); for(let k=1;k<m;k++) im2[k]=1/Math.pow(k,0.85); stringWave=ctx.createPeriodicWave(re2,im2);
     return ctx;
@@ -220,18 +220,16 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       const idx=((semi%12)+12)%12, oct=Math.floor(semi/12), rate=Math.pow(2,oct)*(S.high?2:1)*(S.saHz/bank.saHz);
       const b=bank.buffers[idx]; if(b){
         const src=ctx.createBufferSource(); src.buffer=b; src.playbackRate.value=rate; src.loop=true; src.loopStart=b._loopStart||0.2; src.loopEnd=b._loopEnd||b.duration;
-        const t0=Math.max(ctx.currentTime, t-0.035), A=0.045, Rl=0.09;
-        const g=ctx.createGain(); g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.85,t0+A); g.gain.setValueAtTime(0.85,t+dur-0.02); g.gain.linearRampToValueAtTime(0,t+dur+Rl);
-        src.connect(g); g.connect(voice); src.start(t0, 0.02); src.stop(t+dur+Rl+0.02); track(src,t0); return;
+        const g=ctx.createGain(); const e=envelope(g,t,dur,0.8);
+        src.connect(g); g.connect(voice); src.start(e.start, 0.02); src.stop(e.end+0.02); track(src,e.start); return;
       }
     }
     const base=S.saHz*(S.high?4:2); const f0=base*Math.pow(2,semi/12);
     const o=ctx.createOscillator(); o.setPeriodicWave(reedWave); o.frequency.value=f0;
     const o2=ctx.createOscillator(); o2.setPeriodicWave(reedWave); o2.frequency.value=f0*1.003;
     const fl=ctx.createBiquadFilter(); fl.type='lowpass'; fl.frequency.value=Math.min(f0*8,6000);
-    const t0=Math.max(ctx.currentTime, t-0.035);
-    const g=ctx.createGain(); g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(vol,t0+0.05); g.gain.setValueAtTime(vol,t+dur-0.02); g.gain.linearRampToValueAtTime(0,t+dur+0.09);
-    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(voice); o.start(t0); o2.start(t0); o.stop(t+dur+0.12); o2.stop(t+dur+0.12); track(o,t0); track(o2,t0);
+    const g=ctx.createGain(); const e=envelope(g,t,dur,vol);
+    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(voice); o.start(e.start); o2.start(e.start); o.stop(e.end+0.02); o2.stop(e.end+0.02); track(o,e.start); track(o2,e.start);
   }
   // Rebuild a sample so it can loop without a click: keep the opening, then a body whose end is crossfaded into its start.
   function makeLoopable(b){
@@ -244,6 +242,19 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     const nb=new AudioBuffer({length:le, sampleRate:sr, numberOfChannels:1}); nb.copyToChannel(out,0);
     nb._loopStart=ls/sr; nb._loopEnd=le/sr;
     return nb;
+  }
+  const XF=0.07, XN=64;
+  const FADE_IN=new Float32Array(XN), FADE_OUT=new Float32Array(XN);
+  for(let i=0;i<XN;i++){ const x=i/(XN-1); FADE_IN[i]=Math.sin(x*Math.PI/2); FADE_OUT[i]=Math.cos(x*Math.PI/2); }
+  function envelope(g, t, dur, peak){
+    // attack centred on t, release centred on t+dur, both equal-power so overlapping notes keep a constant level
+    const a0=Math.max(ctx.currentTime, t-XF/2), r0=t+dur-XF/2;
+    const inCurve=FADE_IN.map(v=>v*peak), outCurve=FADE_OUT.map(v=>v*peak);
+    g.gain.setValueAtTime(0,a0);
+    g.gain.setValueCurveAtTime(inCurve, a0, Math.max(0.005, (t+XF/2)-a0));
+    g.gain.setValueAtTime(peak, r0);
+    g.gain.setValueCurveAtTime(outCurve, r0, XF);
+    return {start:a0, end:t+dur+XF/2};
   }
   function b64buf(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u.buffer; }
   async function loadBank(){
