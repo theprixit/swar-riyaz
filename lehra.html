@@ -197,7 +197,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   }
 
   // audio
-  let outDest=null, wakeLock=null, bank=null, live=[];
+  let outDest=null, wakeLock=null, bank=null, live=[], voice=null;
   function track(node,t0){ live.push({n:node,t:t0}); if(live.length>400) live.splice(0,live.length-400); }
   function flushFuture(){ if(!ctx) return; const now=ctx.currentTime; live.forEach(x=>{ if(x.t>now-0.01){ try{ x.n.stop(now); }catch(e){} } }); live=live.filter(x=>x.t<=now-0.01); sched=sched.filter(x=>x.t<=now+0.02); }
   let ctx=null, master=null, reedWave=null, stringWave=null, playing=false, timer=null, nextTime=0, nextIdx=0, avart=0, sched=[];
@@ -205,7 +205,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function ensureCtx(){
     if(ctx){ if(ctx.state==='suspended') ctx.resume(); return ctx; }
     ctx=new (window.AudioContext||window.webkitAudioContext)();
-    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); master.connect(comp); outDest=ctx.createMediaStreamDestination(); comp.connect(outDest); const au=$('bgAudio'); au.srcObject=outDest.stream; au.play().catch(()=>{ comp.connect(ctx.destination); });
+    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.ratio.value=3; comp.attack.value=0.01; comp.release.value=0.25; master.connect(comp); voice=ctx.createGain(); voice.gain.value=1; const tone=ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=5200; tone.Q.value=0.5; voice.connect(tone); tone.connect(master); const dly=ctx.createDelay(0.1); dly.delayTime.value=0.028; const dg=ctx.createGain(); dg.gain.value=0.16; const df=ctx.createBiquadFilter(); df.type='lowpass'; df.frequency.value=2500; tone.connect(dly); dly.connect(df); df.connect(dg); dg.connect(master); outDest=ctx.createMediaStreamDestination(); comp.connect(outDest); const au=$('bgAudio'); au.srcObject=outDest.stream; au.play().catch(()=>{ comp.connect(ctx.destination); });
     const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15); reedWave=ctx.createPeriodicWave(re,im);
     const m=24, re2=new Float32Array(m), im2=new Float32Array(m); for(let k=1;k<m;k++) im2[k]=1/Math.pow(k,0.85); stringWave=ctx.createPeriodicWave(re2,im2);
     return ctx;
@@ -219,24 +219,38 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     if(bank){
       const idx=((semi%12)+12)%12, oct=Math.floor(semi/12), rate=Math.pow(2,oct)*(S.high?2:1)*(S.saHz/bank.saHz);
       const b=bank.buffers[idx]; if(b){
-        const src=ctx.createBufferSource(); src.buffer=b; src.playbackRate.value=rate; src.loop=true; src.loopStart=Math.min(0.3,b.duration*0.3); src.loopEnd=Math.min(1.45,b.duration*0.9);
-        const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.9,t+0.03); g.gain.setValueAtTime(0.9,t+dur-0.06); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-        src.connect(g); g.connect(master); src.start(t); src.stop(t+dur+0.02); track(src,t); return;
+        const src=ctx.createBufferSource(); src.buffer=b; src.playbackRate.value=rate; src.loop=true; src.loopStart=b._loopStart||0.2; src.loopEnd=b._loopEnd||b.duration;
+        const t0=Math.max(ctx.currentTime, t-0.035), A=0.045, Rl=0.09;
+        const g=ctx.createGain(); g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(0.85,t0+A); g.gain.setValueAtTime(0.85,t+dur-0.02); g.gain.linearRampToValueAtTime(0,t+dur+Rl);
+        src.connect(g); g.connect(voice); src.start(t0, 0.02); src.stop(t+dur+Rl+0.02); track(src,t0); return;
       }
     }
     const base=S.saHz*(S.high?4:2); const f0=base*Math.pow(2,semi/12);
     const o=ctx.createOscillator(); o.setPeriodicWave(reedWave); o.frequency.value=f0;
     const o2=ctx.createOscillator(); o2.setPeriodicWave(reedWave); o2.frequency.value=f0*1.003;
     const fl=ctx.createBiquadFilter(); fl.type='lowpass'; fl.frequency.value=Math.min(f0*8,6000);
-    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.04); g.gain.setValueAtTime(vol,t+dur-0.06); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(master); o.start(t); o2.start(t); o.stop(t+dur+0.02); o2.stop(t+dur+0.02); track(o,t); track(o2,t);
+    const t0=Math.max(ctx.currentTime, t-0.035);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(vol,t0+0.05); g.gain.setValueAtTime(vol,t+dur-0.02); g.gain.linearRampToValueAtTime(0,t+dur+0.09);
+    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(voice); o.start(t0); o2.start(t0); o.stop(t+dur+0.12); o2.stop(t+dur+0.12); track(o,t0); track(o2,t0);
+  }
+  // Rebuild a sample so it can loop without a click: keep the opening, then a body whose end is crossfaded into its start.
+  function makeLoopable(b){
+    const sr=b.sampleRate, d=b.getChannelData(0), n=d.length;
+    const ls=Math.floor(sr*0.20), le=Math.min(Math.floor(sr*1.45), n-Math.floor(sr*0.10)), xf=Math.floor(sr*0.08);
+    if(le-ls<sr*0.4) return b;
+    const out=new Float32Array(le);
+    out.set(d.subarray(0,le));
+    for(let i=0;i<xf;i++){ const w=i/xf; out[ls+i]=d[ls+i]*w + d[le+i]*(1-w); }
+    const nb=new AudioBuffer({length:le, sampleRate:sr, numberOfChannels:1}); nb.copyToChannel(out,0);
+    nb._loopStart=ls/sr; nb._loopEnd=le/sr;
+    return nb;
   }
   function b64buf(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u.buffer; }
   async function loadBank(){
     try{
       const r=await fetch('bank.json'); if(!r.ok) throw 0; const j=await r.json();
       const dec=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(1, 1, 44100);
-      const buffers={}; for(const n of j.notes){ buffers[n.semi]=await dec.decodeAudioData(b64buf(n.wav)); }
+      const buffers={}; for(const n of j.notes){ buffers[n.semi]=makeLoopable(await dec.decodeAudioData(b64buf(n.wav))); }
       bank={saHz:j.saHz, buffers};
       $('voiceLine').textContent='Voice: your harmonium (recorded Sa '+j.saHz.toFixed(1)+' Hz). Sa above is used only for the tanpura; the lehra is shifted to match it.';
     }catch(e){ bank=null; $('voiceLine').textContent='Voice: synth reed (harmonium samples not found).'; }
@@ -255,7 +269,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     while(nextTime<ctx.currentTime+1.6){
       const m=(nextIdx%T.n)+1;
       let semi=parse(toks[nextIdx%T.n]);
-      let hold=1; if(semi!==null){ for(let k=1;k<T.n;k++){ if(toks[(nextIdx+k)%T.n]==='-') hold++; else break; } reed(semi,nextTime,beat*hold*0.98,0.22); }
+      let hold=1; if(semi!==null){ for(let k=1;k<T.n;k++){ if(toks[(nextIdx+k)%T.n]==='-') hold++; else break; } reed(semi,nextTime,beat*hold,0.22); }
       const strong=m===1;
       if(S.clicks==='all' || (S.clicks==='sam'&&strong) || (S.clicks==='tali'&&isVibStart(m)&&(isTali(m)||strong))) click(nextTime,strong);
       sched.push({t:nextTime,m:m,a:Math.floor(nextIdx/T.n)+1});
