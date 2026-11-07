@@ -109,6 +109,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       <button class="primary" id="playBtn">Start</button>
       <button id="tapBtn">Tap tempo</button>
     </div>
+    <div class="small" id="voiceLine" style="margin-top:10px;text-align:center">Voice: synth reed (loading your harmonium...)</div>
+    <audio id="bgAudio" playsinline hidden></audio>
   </section>
 
   <section class="card">
@@ -118,6 +120,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
         <li>Sam (matra 1) is red. Tali matras show their count, khali shows 0. The cell outlined in brass is the matra sounding now.</li>
         <li>Start at 60 to 80 for theka. For kaida practice in dugun, keep the lehra at the same tempo and play two bols per matra; don't speed the lehra up.</li>
         <li>Tap tempo: tap the button four times on the beat and the slider follows.</li>
+        <li>While it plays, the screen is asked to stay awake, and the sound is routed like a music track so it should carry on with the screen locked or another app in front. On iPhone the silent switch does not mute it, but the Lock Screen's pause button will.</li>
         <li>These are simple practice lehras written for this page, one note per matra, following each raga's rules. They are not transcriptions of any recording.</li>
       </ul>
     </details>
@@ -191,12 +194,13 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   }
 
   // audio
+  let outDest=null, wakeLock=null, bank=null;
   let ctx=null, master=null, reedWave=null, stringWave=null, playing=false, timer=null, nextTime=0, nextIdx=0, avart=0, sched=[];
   let droneOn=false, droneTimer=null, droneGain=null;
   function ensureCtx(){
     if(ctx){ if(ctx.state==='suspended') ctx.resume(); return ctx; }
     ctx=new (window.AudioContext||window.webkitAudioContext)();
-    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); master.connect(comp); outDest=ctx.createMediaStreamDestination(); comp.connect(outDest); const au=$('bgAudio'); au.srcObject=outDest.stream; au.play().catch(()=>{ comp.connect(ctx.destination); });
     const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15); reedWave=ctx.createPeriodicWave(re,im);
     const m=24, re2=new Float32Array(m), im2=new Float32Array(m); for(let k=1;k<m;k++) im2[k]=1/Math.pow(k,0.85); stringWave=ctx.createPeriodicWave(re2,im2);
     return ctx;
@@ -207,6 +211,14 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function stopDrone(){ droneOn=false; clearTimeout(droneTimer); }
 
   function reed(semi,t,dur,vol){
+    if(bank){
+      const idx=((semi%12)+12)%12, oct=Math.floor(semi/12), rate=Math.pow(2,oct)*(S.high?2:1)*(S.saHz/bank.saHz);
+      const b=bank.buffers[idx]; if(b){
+        const src=ctx.createBufferSource(); src.buffer=b; src.playbackRate.value=rate; src.loop=true; src.loopStart=Math.min(0.3,b.duration*0.3); src.loopEnd=Math.min(1.45,b.duration*0.9);
+        const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.9,t+0.03); g.gain.setValueAtTime(0.9,t+dur-0.06); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+        src.connect(g); g.connect(master); src.start(t); src.stop(t+dur+0.02); return;
+      }
+    }
     const base=S.saHz*(S.high?4:2); const f0=base*Math.pow(2,semi/12);
     const o=ctx.createOscillator(); o.setPeriodicWave(reedWave); o.frequency.value=f0;
     const o2=ctx.createOscillator(); o2.setPeriodicWave(reedWave); o2.frequency.value=f0*1.003;
@@ -214,6 +226,17 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.04); g.gain.setValueAtTime(vol,t+dur-0.06); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(master); o.start(t); o2.start(t); o.stop(t+dur+0.02); o2.stop(t+dur+0.02);
   }
+  function b64buf(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u.buffer; }
+  async function loadBank(){
+    try{
+      const r=await fetch('bank.json'); if(!r.ok) throw 0; const j=await r.json();
+      const dec=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(1, 1, 44100);
+      const buffers={}; for(const n of j.notes){ buffers[n.semi]=await dec.decodeAudioData(b64buf(n.wav)); }
+      bank={saHz:j.saHz, buffers};
+      $('voiceLine').textContent='Voice: your harmonium (recorded Sa '+j.saHz.toFixed(1)+' Hz). Sa above is used only for the tanpura; the lehra is shifted to match it.';
+    }catch(e){ bank=null; $('voiceLine').textContent='Voice: synth reed (harmonium samples not found).'; }
+  }
+  loadBank();
   function click(t,strong){
     const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(strong?1400:1000,t); o.frequency.exponentialRampToValueAtTime(strong?700:500,t+0.04);
     const g=ctx.createGain(); g.gain.setValueAtTime(strong?0.35:0.15,t); g.gain.exponentialRampToValueAtTime(0.0001,t+(strong?0.09:0.05));
@@ -224,7 +247,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
 
   function schedule(){
     const L=cur(), T=taal(), toks=L.notes.split(/\s+/), beat=60/S.bpm;
-    while(nextTime<ctx.currentTime+0.25){
+    while(nextTime<ctx.currentTime+3.0){
       const m=(nextIdx%T.n)+1;
       let semi=parse(toks[nextIdx%T.n]);
       let hold=1; if(semi!==null){ for(let k=1;k<T.n;k++){ if(toks[(nextIdx+k)%T.n]==='-') hold++; else break; } reed(semi,nextTime,beat*hold*0.98,0.22); }
@@ -238,15 +261,31 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function tick(){
     raf=requestAnimationFrame(tick);
     if(!ctx) return; const now=ctx.currentTime;
-    while(sched.length>1 && sched[1].t<=now) sched.shift();
+    while(sched.length>1 && sched[1].t<=now) sched.shift(); if(sched.length>200) sched.splice(0, sched.length-200);
     if(sched.length && sched[0].t<=now){ const s=sched[0]; const T=taal();
       document.querySelectorAll('.taal .m').forEach(c=>c.classList.toggle('on',+c.dataset.m===s.m));
       $('matraV').textContent=s.m; $('avartV').textContent=s.a; }
   }
-  function start(){ ensureCtx(); playing=true; nextTime=ctx.currentTime+0.1; nextIdx=0; sched=[]; timer=setInterval(schedule,80); schedule(); if(S.drone) startDrone(); $('playBtn').textContent='Stop'; cancelAnimationFrame(raf); tick(); }
-  function stop(){ playing=false; clearInterval(timer); stopDrone(); $('playBtn').textContent='Start'; cancelAnimationFrame(raf); document.querySelectorAll('.taal .m').forEach(c=>c.classList.remove('on')); $('matraV').textContent='1'; $('avartV').textContent='0'; }
+  function start(){ ensureCtx(); playing=true; nextTime=ctx.currentTime+0.1; nextIdx=0; sched=[]; timer=setInterval(schedule,400); schedule(); if(S.drone) startDrone(); $('playBtn').textContent='Stop'; cancelAnimationFrame(raf); tick(); keepAwake(true); mediaSession(); }
+  function stop(){ playing=false; clearInterval(timer); stopDrone(); keepAwake(false); $('playBtn').textContent='Start'; cancelAnimationFrame(raf); document.querySelectorAll('.taal .m').forEach(c=>c.classList.remove('on')); $('matraV').textContent='1'; $('avartV').textContent='0'; }
   $('playBtn').addEventListener('click',()=> playing?stop():start());
 
+  async function keepAwake(on){
+    try{
+      if(on){ if(navigator.wakeLock && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }
+      else if(wakeLock){ await wakeLock.release(); wakeLock=null; }
+    }catch(e){ wakeLock=null; }
+  }
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && playing){ keepAwake(true); if(ctx && ctx.state==='suspended') ctx.resume(); } });
+  function mediaSession(){
+    if(!('mediaSession' in navigator)) return;
+    try{
+      const L=cur(); navigator.mediaSession.metadata=new MediaMetadata({title:TAALS[L.taal].name+' lehra in '+L.raga, artist:'Lehra Saath', album:S.bpm+' per minute'});
+      navigator.mediaSession.setActionHandler('pause',()=>stop());
+      navigator.mediaSession.setActionHandler('play',()=>{ if(!playing) start(); });
+      navigator.mediaSession.setActionHandler('stop',()=>stop());
+    }catch(e){}
+  }
   let taps=[];
   $('tapBtn').addEventListener('click',()=>{ const t=performance.now(); taps=taps.filter(x=>t-x<3000); taps.push(t); if(taps.length>=3){ const iv=(taps[taps.length-1]-taps[0])/(taps.length-1); const b=Math.round(60000/iv); if(b>=30&&b<=240){ S.bpm=b; $('bpm').value=b; $('bpmV').textContent=b; $('layaName').textContent=b<60?'vilambit':(b<120?'madhya':'drut'); save(); } } });
 

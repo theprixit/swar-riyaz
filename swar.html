@@ -621,18 +621,19 @@ input[type=file]{font:inherit;font-size:.9rem;max-width:100%}
       if(db){ dbDoc = db.doc('samples/bank'); const s = await dbDoc.get(); if(s.exists && s.data().asset){ S.bankId = s.data().asset; save(); } }
     }catch(e){}
     if(S.bankId) loadBank(S.bankId);
+    else if(!assetsApi){ S.bankId='local'; loadBank('local'); }
   }
   async function loadBank(id){
     try{
       setBankStatus('Loading your recording...');
-      const res = await fetch('/_blob/'+id); if(!res.ok) throw new Error('missing');
+      const res = await fetch(id==='local' ? 'bank.json' : '/_blob/'+id); if(!res.ok) throw new Error('missing');
       const j = await res.json();
       ensureCtx();
       const buffers = {};
       for(const n of j.notes){ buffers[n.semi] = await ctx.decodeAudioData(base64ToBuf(n.wav)); }
       S.bank = {saHz: j.saHz, buffers};
       renderBank(); renderDrone();
-    }catch(e){ S.bank=null; S.bankId=null; save(); setBankStatus('Saved recording could not be loaded. Record again below.', 'bad'); }
+    }catch(e){ S.bank=null; if(id!=='local'){ S.bankId=null; save(); } setBankStatus(id==='local' ? 'Sound: synth reed. No harmonium samples found.' : 'Saved recording could not be loaded. Record again below.', id==='local'?'':'bad'); }
   }
   function setBankStatus(msg, cls){ const el=$('bankStatus'); el.textContent=msg; el.className='status'+(cls?' '+cls:''); }
   function renderBank(){
