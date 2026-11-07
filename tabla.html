@@ -40,7 +40,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .hz{font-family:var(--font-mono);font-size:2.4rem;font-variant-numeric:tabular-nums;line-height:1}
 .hz small{font-size:1rem;color:var(--muted)}
 .verdict{font-family:var(--font-display);font-size:1.4rem;font-weight:600;min-height:1.4em;text-align:center}
-.verdict.good{color:var(--good)} .verdict.flat,.verdict.sharp{color:var(--bad)}
+.verdict.good{color:var(--good)} .verdict.close{color:var(--brass)} .verdict.flat,.verdict.sharp{color:var(--bad)}
 .hint{font-size:.9rem;color:var(--muted);text-align:center;min-height:1.3em}
 svg{width:100%;max-width:420px;height:auto;display:block}
 .target{font-family:var(--font-mono);font-size:.85rem;color:var(--muted)}
@@ -92,6 +92,14 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
         <button data-o="-1">One down</button>
       </div>
     </div>
+    <div style="margin-top:12px">
+      <div class="small" style="margin-bottom:6px">Tolerance</div>
+      <div class="seg" id="tolSeg">
+        <button data-t="5">Fine ±5 cents</button>
+        <button data-t="10" aria-pressed="true">Normal ±10</button>
+        <button data-t="20">Coarse ±20</button>
+      </div>
+    </div>
     <div class="target" style="margin-top:10px" id="targetLine"></div>
   </section>
 
@@ -140,8 +148,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const KEYS=['Safed 1','Kali 1','Safed 2','Kali 2','Safed 3','Safed 4','Kali 3','Safed 5','Kali 4','Safed 6','Kali 5','Safed 7'];
   const $=id=>document.getElementById(id);
-  const S={saHz:140.6, ratio:1, oct:'auto'};
-  try{ const s=JSON.parse(localStorage.getItem('tabla-sur')||'{}'); if(s.saHz) S.saHz=s.saHz; if(s.ratio) S.ratio=s.ratio; if(s.oct!==undefined) S.oct=s.oct; }catch(e){}
+  const S={saHz:140.6, ratio:1, oct:'auto', tol:10};
+  try{ const s=JSON.parse(localStorage.getItem('tabla-sur')||'{}'); if(s.saHz) S.saHz=s.saHz; if(s.ratio) S.ratio=s.ratio; if(s.oct!==undefined) S.oct=s.oct; if(s.tol) S.tol=s.tol; }catch(e){}
   function save(){ try{ localStorage.setItem('tabla-sur', JSON.stringify(S)); }catch(e){} }
 
   const saSel=$('saSel');
@@ -153,6 +161,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   [...$('modeSeg').children].forEach(x=>x.setAttribute('aria-pressed',+x.dataset.r===S.ratio));
   $('octSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.oct=b.dataset.o==='auto'?'auto':+b.dataset.o; save(); [...$('octSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); renderTarget(); });
   [...$('octSeg').children].forEach(x=>x.setAttribute('aria-pressed',(x.dataset.o==='auto'?'auto':+x.dataset.o)===S.oct));
+  $('tolSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.tol=+b.dataset.t; save(); [...$('tolSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); drawArc(); });
+  [...$('tolSeg').children].forEach(x=>x.setAttribute('aria-pressed',+x.dataset.t===S.tol));
   function target(){
     let f=S.saHz*S.ratio;
     if(S.oct==='auto'){
@@ -166,28 +176,30 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
 
   // gauge
   const ticks=$('ticks'); for(let c=-50;c<=50;c+=10){ const a=(c/50)*Math.PI/2; const x1=210+Math.sin(a)*172,y1=130-Math.cos(a)*172,x2=210+Math.sin(a)*(c%50?166:160),y2=130-Math.cos(a)*(c%50?166:160); const l=document.createElementNS('http://www.w3.org/2000/svg','line'); l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2); ticks.appendChild(l); }
-  (function(){ const a1=(-5/50)*Math.PI/2,a2=(5/50)*Math.PI/2; $('goodArc').setAttribute('d','M'+(210+Math.sin(a1)*180)+' '+(130-Math.cos(a1)*180)+' A180 180 0 0 1 '+(210+Math.sin(a2)*180)+' '+(130-Math.cos(a2)*180)); })();
+  function drawArc(){ const a1=(-S.tol/50)*Math.PI/2,a2=(S.tol/50)*Math.PI/2; $('goodArc').setAttribute('d','M'+(210+Math.sin(a1)*180)+' '+(130-Math.cos(a1)*180)+' A180 180 0 0 1 '+(210+Math.sin(a2)*180)+' '+(130-Math.cos(a2)*180)); }
+  drawArc();
   function setNeedle(cents, live){ const c=Math.max(-50,Math.min(50,cents)); const a=(c/50)*Math.PI/2; const n=$('needle'); n.setAttribute('x2',210+Math.sin(a)*90); n.setAttribute('y2',130-Math.cos(a)*90); n.setAttribute('opacity',live?'1':'.25'); }
 
   // audio
+  let lastClarity=0, peakRms=0;
   let ctx=null, stream=null, analyser=null, raf=0, buf=null, lastGood=0, hist=[], lastRms=0, sink=null, prevRms=0, strokeAt=0, strokeVals=[], strokeDone=false, lastStrokeCents=null, refUntil=0;
   function ensureCtx(){ if(!ctx){ ctx=new (window.AudioContext||window.webkitAudioContext)(); } if(ctx.state==='suspended') ctx.resume(); return ctx; }
   function nsdfPitch(x, sr){
     const N=x.length, minLag=Math.floor(sr/1200), maxLag=Math.min(Math.floor(sr/50), N-2);
-    let e=0; for(let i=0;i<N;i++) e+=x[i]*x[i]; lastRms=Math.sqrt(e/N); if(lastRms<0.004) return 0;
+    lastClarity=0; let e=0; for(let i=0;i<N;i++) e+=x[i]*x[i]; lastRms=Math.sqrt(e/N); if(lastRms<0.004) return 0;
     const nsdf=new Float32Array(maxLag+1);
     for(let t=minLag;t<=maxLag;t++){ let acf=0,m=0; for(let i=0;i<N-t;i++){ const a=x[i],b=x[i+t]; acf+=a*b; m+=a*a+b*b; } nsdf[t]=m?2*acf/m:0; }
     const peaks=[]; let i=minLag; while(i<=maxLag&&nsdf[i]>0) i++;
     for(;i<maxLag;i++) if(nsdf[i]>nsdf[i-1]&&nsdf[i]>=nsdf[i+1]&&nsdf[i]>0.4) peaks.push(i);
     if(!peaks.length) return 0;
     let best=0; for(const p of peaks) if(nsdf[p]>best) best=nsdf[p];
-    if(best<0.65) return 0;
+    lastClarity=best; if(best<0.65) return 0;
     const tau=peaks.find(p=>nsdf[p]>=0.92*best);
     const a=nsdf[tau-1],b=nsdf[tau],c=nsdf[tau+1],den=a-2*b+c; const sh=den?0.5*(a-c)/den:0;
     return sr/(tau+sh);
   }
   function centsToTarget(f){ return 1200*Math.log2(f/target()); }
-  let recent=[], trace=[], strokeHz=[];
+  let recent=[], trace=[], strokeHz=[], knock=false;
   const TRACE_MS=10000;
   function loop(){
     raf=requestAnimationFrame(loop);
@@ -197,20 +209,24 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     $('lvl').style.width=Math.min(100, lastRms*600)+'%';
     if(now<refUntil){ prevRms=lastRms; drawTrace(now); return; }
     const onset = lastRms>Math.max(0.012, prevRms*3) && now-strokeAt>300;
-    if(onset){ strokeAt=now; strokeVals=[]; strokeDone=false; recent=[]; trace.push({t:now, onset:true}); }
+    if(onset){ strokeAt=now; strokeVals=[]; strokeDone=false; recent=[]; peakRms=lastRms; knock=false; trace.push({t:now, onset:true}); }
     prevRms=lastRms;
     const since=now-strokeAt;
-    if(f>0 && since>60){
-      recent.push(f); if(recent.length>3) recent.shift();
+    if(lastRms>peakRms) peakRms=lastRms;
+    if(!knock && since>140 && since<260 && lastRms<peakRms*0.12) knock=true;
+    const tooFar=f>0 && Math.abs(centsToTarget(f))>700;
+    if(f>0 && since>80 && !knock && lastClarity>=0.75 && !tooFar){
+      recent.push(f); if(recent.length>5) recent.shift();
       const sorted=recent.slice().sort((a,b)=>a-b); const med=sorted[Math.floor(sorted.length/2)];
       const c=centsToTarget(med);
       trace.push({t:now, c:c, hz:med});
       liveShow(med, c); lastGood=now;
-      if(!strokeDone && since>120 && since<900) strokeVals.push(f);
-    } else recent=[];
+      if(!strokeDone && since>120 && since<900 && lastClarity>=0.8) strokeVals.push(f);
+    } else if(f===0) recent=[];
     if(strokeAt && !strokeDone && since>=900){
       strokeDone=true;
-      if(strokeVals.length>=3){ const so=strokeVals.slice().sort((a,b)=>a-b); const med=so[Math.floor(so.length/2)]; strokeSummary(med); }
+      if(knock){ /* hammer or hand knock, not a drum stroke */ }
+      else if(strokeVals.length>=3){ const so=strokeVals.slice().sort((a,b)=>a-b); const med=so[Math.floor(so.length/2)]; strokeSummary(med); }
     }
     if(lastRms<0.004 && now-lastGood>2000){ setNeedle(lastStrokeCents===null?0:Math.max(-50,Math.min(50,lastStrokeCents)), false); }
     drawTrace(now);
@@ -224,16 +240,16 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     while(trace.length && now-trace[0].t>TRACE_MS) trace.shift();
     const css=getComputedStyle(document.documentElement);
     g.clearRect(0,0,W,H);
-    g.fillStyle=css.getPropertyValue('--good').trim(); g.globalAlpha=.18; g.fillRect(0,H/2-H*5/100,W,H*10/100); g.globalAlpha=1;
+    g.fillStyle=css.getPropertyValue('--good').trim(); g.globalAlpha=.18; g.fillRect(0,H/2-(S.tol/50)*(H/2-8),W,2*(S.tol/50)*(H/2-8)); g.globalAlpha=1;
     g.strokeStyle=css.getPropertyValue('--line').trim(); g.lineWidth=2;
     [-50,-25,25,50].forEach(v=>{ const y=H/2-v/50*(H/2-8); g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); });
     g.strokeStyle=css.getPropertyValue('--ink').trim(); g.globalAlpha=.5; g.beginPath(); g.moveTo(0,H/2); g.lineTo(W,H/2); g.stroke(); g.globalAlpha=1;
-    const good=css.getPropertyValue('--good').trim(), bad=css.getPropertyValue('--bad').trim(), mut=css.getPropertyValue('--muted').trim();
+    const good=css.getPropertyValue('--good').trim(), bad=css.getPropertyValue('--bad').trim(), mut=css.getPropertyValue('--muted').trim(), brass=css.getPropertyValue('--brass').trim();
     for(const p of trace){
       const x=W-(now-p.t)/TRACE_MS*W;
       if(p.onset){ g.strokeStyle=mut; g.lineWidth=2; g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); continue; }
       const cc=Math.max(-55,Math.min(55,p.c)); const y=H/2-cc/50*(H/2-8);
-      g.fillStyle=Math.abs(p.c)<=5?good:bad; g.beginPath(); g.arc(x,y,4,0,Math.PI*2); g.fill();
+      g.fillStyle=Math.abs(p.c)<=S.tol?good:(Math.abs(p.c)<=2*S.tol?brass:bad); g.beginPath(); g.arc(x,y,4,0,Math.PI*2); g.fill();
     }
     g.fillStyle=mut; g.font='20px DM Mono, monospace'; g.textBaseline='top'; g.fillText('+50',6,4); g.textBaseline='bottom'; g.fillText('-50',6,H-4);
   }
@@ -269,7 +285,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     }
     const delta=lastStrokeCents===null?'':'  (' + (c-lastStrokeCents>=0?'+':'') + (c-lastStrokeCents).toFixed(0) + ' since last stroke)';
     lastStrokeCents=c;
-    if(Math.abs(c)<=5){ v.textContent='In sur'; v.className='verdict good'; h.textContent=(c>=0?'+':'')+c.toFixed(1)+' cents'+delta; }
+    if(Math.abs(c)<=S.tol){ v.textContent='In sur'; v.className='verdict good'; h.textContent=(c>=0?'+':'')+c.toFixed(1)+' cents'+delta; }
+    else if(Math.abs(c)<=2*S.tol){ v.textContent='Close, '+(c<0?'a shade flat':'a shade sharp')+' ('+(c>=0?'+':'')+c.toFixed(0)+')'; v.className='verdict close'; h.textContent=(c<0?'A light tap on the gajra, downward.':'A light tap on the gajra, upward.')+delta; }
     else if(c<0){ v.textContent='Flat by '+Math.abs(c).toFixed(0)+' cents'; v.className='verdict flat'; h.textContent=(S.ratio<1?'Tighten: tap the gatta down.':'Raise it: tap the gatta (or gajra above it) down.')+delta; }
     else { v.textContent='Sharp by '+c.toFixed(0)+' cents'; v.className='verdict sharp'; h.textContent=(S.ratio<1?'Loosen: tap the gatta up from below.':'Lower it: tap the gatta up from below.')+delta; }
   }
