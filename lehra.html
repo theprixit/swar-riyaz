@@ -205,7 +205,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function ensureCtx(){
     if(ctx){ if(ctx.state==='suspended') ctx.resume(); return ctx; }
     ctx=new (window.AudioContext||window.webkitAudioContext)();
-    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-4; comp.knee.value=6; comp.ratio.value=6; comp.attack.value=0.003; comp.release.value=0.12; master.connect(comp); voice=ctx.createGain(); voice.gain.value=1; const tone=ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=5200; tone.Q.value=0.5; voice.connect(tone); tone.connect(master); const dly=ctx.createDelay(0.1); dly.delayTime.value=0.028; const dg=ctx.createGain(); dg.gain.value=0.10; const df=ctx.createBiquadFilter(); df.type='lowpass'; df.frequency.value=2500; tone.connect(dly); dly.connect(df); df.connect(dg); dg.connect(master); outDest=ctx.createMediaStreamDestination(); comp.connect(outDest); const au=$('bgAudio'); au.srcObject=outDest.stream; au.play().catch(()=>{ comp.connect(ctx.destination); });
+    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-4; comp.knee.value=6; comp.ratio.value=6; comp.attack.value=0.003; comp.release.value=0.12; master.connect(comp); voice=ctx.createGain(); voice.gain.value=1; const tone=ctx.createBiquadFilter(); tone.type='lowpass'; tone.frequency.value=5200; tone.Q.value=0.5; voice.connect(tone); tone.connect(master); outDest=ctx.createMediaStreamDestination(); comp.connect(outDest); const au=$('bgAudio'); au.srcObject=outDest.stream; au.play().catch(()=>{ comp.connect(ctx.destination); });
     const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15); reedWave=ctx.createPeriodicWave(re,im);
     const m=24, re2=new Float32Array(m), im2=new Float32Array(m); for(let k=1;k<m;k++) im2[k]=1/Math.pow(k,0.85); stringWave=ctx.createPeriodicWave(re2,im2);
     return ctx;
@@ -221,7 +221,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       const b=bank.buffers[idx]; if(b){
         const src=ctx.createBufferSource(); src.buffer=b; src.playbackRate.value=rate; src.loop=true; src.loopStart=b._loopStart||0.2; src.loopEnd=b._loopEnd||b.duration;
         const g=ctx.createGain(); const e=envelope(g,t,dur,0.8);
-        src.connect(g); g.connect(voice); src.start(e.start, 0.02); src.stop(e.end+0.02); track(src,e.start); return;
+        const off=(b._loopStart||0.2)+0.12+Math.random()*0.25;
+        src.connect(g); g.connect(voice); src.start(e.start, Math.min(off, b.duration-0.3)); src.stop(e.end+0.02); track(src,e.start); return;
       }
     }
     const base=S.saHz*(S.high?4:2); const f0=base*Math.pow(2,semi/12);
@@ -243,7 +244,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     nb._loopStart=ls/sr; nb._loopEnd=le/sr;
     return nb;
   }
-  const XF=0.07, XN=64;
+  const XF=0.09, XN=64;
   const FADE_IN=new Float32Array(XN), FADE_OUT=new Float32Array(XN);
   for(let i=0;i<XN;i++){ const x=i/(XN-1); FADE_IN[i]=Math.sin(x*Math.PI/2); FADE_OUT[i]=Math.cos(x*Math.PI/2); }
   function envelope(g, t, dur, peak){
