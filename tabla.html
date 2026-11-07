@@ -16,6 +16,7 @@
     --accent:#c24d3b; --brass:#c8a04a; --good:#5db686; --bad:#e06a56; --chip:#272a2d; color-scheme:dark; }
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px}
@@ -104,20 +105,23 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   </section>
 
   <section class="card meter">
-    <svg viewBox="0 0 420 150" role="img" aria-label="Tuning needle">
-      <path d="M30 130 A180 180 0 0 1 390 130" fill="none" stroke="var(--line)" stroke-width="10"/>
-      <path id="goodArc" d="" fill="none" stroke="var(--good)" stroke-width="10" opacity=".55"/>
+    <svg viewBox="0 0 420 200" role="img" aria-label="Tuning needle">
+      <path d="M80.1 95 A150 150 0 0 1 339.9 95" fill="none" stroke="var(--line)" stroke-width="12" stroke-linecap="round"/>
+      <path id="closeArc" d="" fill="none" stroke="var(--brass)" stroke-width="12" opacity=".35"/>
+      <path id="goodArc" d="" fill="none" stroke="var(--good)" stroke-width="12" opacity=".65"/>
       <g id="ticks" stroke="var(--muted)" stroke-width="1.5"></g>
-      <text x="30" y="148" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">-50</text>
-      <text x="210" y="24" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">0</text>
-      <text x="390" y="148" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">+50</text>
-      <line id="needle" x1="210" y1="130" x2="210" y2="40" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" opacity=".25"/>
-      <circle cx="210" cy="130" r="6" fill="var(--ink)"/>
+      <text x="72" y="128" font-size="13" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">-50</text>
+      <text x="210" y="14" font-size="13" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">0</text>
+      <text x="348" y="128" font-size="13" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">+50</text>
+      <text x="120" y="188" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="Karla,sans-serif">flat · tighten</text>
+      <text x="300" y="188" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="Karla,sans-serif">sharp · loosen</text>
+      <line id="needle" x1="210" y1="170" x2="210" y2="50" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" opacity=".25"/>
+      <circle cx="210" cy="170" r="7" fill="var(--ink)"/>
     </svg>
     <div class="hz"><span id="hzVal">--</span><small> Hz</small></div>
     <div class="verdict" id="verdict">Start the mic, then strike the dayan.</div>
     <div class="hint" id="hint"></div>
-    <canvas id="trace" width="840" height="240" style="width:100%;max-width:420px;height:120px;border:1px solid var(--line);border-radius:8px;background:var(--chip)"></canvas>
+    <canvas id="trace" style="width:100%;max-width:420px;height:140px;border:1px solid var(--line);border-radius:8px;background:var(--chip)"></canvas>
     <div class="row" style="justify-content:center" id="suggestRow" hidden><span class="small" id="suggestTxt"></span><button id="suggestBtn" style="padding:6px 10px;font-size:.85rem"></button></div>
     <div class="row" style="justify-content:center;margin-top:6px">
       <button class="primary" id="micBtn">Start mic</button>
@@ -137,7 +141,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
         <li>Coarse tuning: tap the gatta down with the hammer to raise, up from below to lower. Fine tuning: tap the gajra (the braid) just above the gatta, down to raise, up to lower.</li>
         <li>Get all positions within about 5 cents, then check the open <em>Tun</em> in the middle; it should match too.</li>
         <li>Baya is tuned loosely, an octave below Sa or to lower Pa. Read it with a soft open <em>Ghe</em>, heel off the skin.</li>
-        <li>The needle and the trace follow the sound continuously; a vertical line marks each stroke and the verdict is taken from the first second after it; the hint line shows how far it moved since the previous stroke. While the reference tone is sounding the mic is ignored, so with the loop on, strike in the silent gap. Note: so the dayan reading as 281 Hz against a 140.6 Hz Sa is in tune, one octave up, which is normal.</li>
+        <li>The needle and the trace follow the sound continuously; a dotted line marks each stroke and the verdict is taken from the first second after it. The hint line shows how far the pitch moved since the previous stroke. While the reference tone is sounding the mic is ignored, so with the loop on, strike in the silent gap.</li>
+        <li>The target is one specific pitch, shown above the dial. Auto picks the octave of your Sa that this size of drum can reach; if the drum reads far from it, the page suggests the nearest of Sa, Pa or Ma.</li>
       </ul>
     </details>
   </section>
@@ -175,10 +180,14 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function renderTarget(){ const t=target(); const base=S.saHz*S.ratio; const oc=Math.round(Math.log2(t/base)); $('targetLine').innerHTML='target <b>'+t.toFixed(1)+' Hz</b> ('+noteOf(t)+')'+(oc?', '+Math.abs(oc)+' octave'+(Math.abs(oc)>1?'s':'')+(oc>0?' above':' below')+' your Sa':', same octave as your Sa'); }
 
   // gauge
-  const ticks=$('ticks'); for(let c=-50;c<=50;c+=10){ const a=(c/50)*Math.PI/2; const x1=210+Math.sin(a)*172,y1=130-Math.cos(a)*172,x2=210+Math.sin(a)*(c%50?166:160),y2=130-Math.cos(a)*(c%50?166:160); const l=document.createElementNS('http://www.w3.org/2000/svg','line'); l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2); ticks.appendChild(l); }
-  function drawArc(){ const a1=(-S.tol/50)*Math.PI/2,a2=(S.tol/50)*Math.PI/2; $('goodArc').setAttribute('d','M'+(210+Math.sin(a1)*180)+' '+(130-Math.cos(a1)*180)+' A180 180 0 0 1 '+(210+Math.sin(a2)*180)+' '+(130-Math.cos(a2)*180)); }
+  const CX=210, CY=170, R=150, SWEEP=Math.PI/3;
+  const ang=c=>(Math.max(-50,Math.min(50,c))/50)*SWEEP;
+  const pt=(c,r)=>[CX+Math.sin(ang(c))*r, CY-Math.cos(ang(c))*r];
+  const ticks=$('ticks'); for(let c=-50;c<=50;c+=10){ const [x1,y1]=pt(c,R-10),[x2,y2]=pt(c,c%50?R-20:R-24); const l=document.createElementNS('http://www.w3.org/2000/svg','line'); l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2); ticks.appendChild(l); }
+  function arcPath(c1,c2){ const [x1,y1]=pt(c1,R),[x2,y2]=pt(c2,R); return 'M'+x1.toFixed(1)+' '+y1.toFixed(1)+' A'+R+' '+R+' 0 0 1 '+x2.toFixed(1)+' '+y2.toFixed(1); }
+  function drawArc(){ $('goodArc').setAttribute('d',arcPath(-S.tol,S.tol)); $('closeArc').setAttribute('d',arcPath(-2*S.tol,2*S.tol)); }
   drawArc();
-  function setNeedle(cents, live){ const c=Math.max(-50,Math.min(50,cents)); const a=(c/50)*Math.PI/2; const n=$('needle'); n.setAttribute('x2',210+Math.sin(a)*90); n.setAttribute('y2',130-Math.cos(a)*90); n.setAttribute('opacity',live?'1':'.25'); }
+  function setNeedle(cents, live){ const [x2,y2]=pt(cents,R-30); const n=$('needle'); n.setAttribute('x2',x2); n.setAttribute('y2',y2); n.setAttribute('opacity',live?'1':'.25'); }
 
   // audio
   let lastClarity=0, peakRms=0;
@@ -235,24 +244,35 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     $('hzVal').textContent=f.toFixed(1);
     setNeedle(Math.abs(c)>650?(c<0?-50:50):c, true);
   }
+  function sizeTrace(){ const cv=$('trace'); const r=cv.getBoundingClientRect(); const d=window.devicePixelRatio||1; if(cv.width!==Math.round(r.width*d)){ cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d); } return d; }
   function drawTrace(now){
-    const cv=$('trace'), g=cv.getContext('2d'), W=cv.width, H=cv.height;
+    const cv=$('trace'), d=sizeTrace(), g=cv.getContext('2d'); g.setTransform(d,0,0,d,0,0);
+    const W=cv.width/d, H=cv.height/d, PADR=34, PADT=10, PADB=16, PW=W-PADR, PH=H-PADT-PADB;
+    const yOf=c=>PADT+PH/2-Math.max(-55,Math.min(55,c))/55*(PH/2);
     while(trace.length && now-trace[0].t>TRACE_MS) trace.shift();
     const css=getComputedStyle(document.documentElement);
+    const good=css.getPropertyValue('--good').trim(), bad=css.getPropertyValue('--bad').trim(), mut=css.getPropertyValue('--muted').trim(), brass=css.getPropertyValue('--brass').trim(), line=css.getPropertyValue('--line').trim(), ink=css.getPropertyValue('--ink').trim();
     g.clearRect(0,0,W,H);
-    g.fillStyle=css.getPropertyValue('--good').trim(); g.globalAlpha=.18; g.fillRect(0,H/2-(S.tol/50)*(H/2-8),W,2*(S.tol/50)*(H/2-8)); g.globalAlpha=1;
-    g.strokeStyle=css.getPropertyValue('--line').trim(); g.lineWidth=2;
-    [-50,-25,25,50].forEach(v=>{ const y=H/2-v/50*(H/2-8); g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); });
-    g.strokeStyle=css.getPropertyValue('--ink').trim(); g.globalAlpha=.5; g.beginPath(); g.moveTo(0,H/2); g.lineTo(W,H/2); g.stroke(); g.globalAlpha=1;
-    const good=css.getPropertyValue('--good').trim(), bad=css.getPropertyValue('--bad').trim(), mut=css.getPropertyValue('--muted').trim(), brass=css.getPropertyValue('--brass').trim();
+    g.fillStyle=brass; g.globalAlpha=.10; g.fillRect(0,yOf(2*S.tol),PW,yOf(-2*S.tol)-yOf(2*S.tol));
+    g.fillStyle=good; g.globalAlpha=.18; g.fillRect(0,yOf(S.tol),PW,yOf(-S.tol)-yOf(S.tol)); g.globalAlpha=1;
+    g.strokeStyle=line; g.lineWidth=1; [-50,-25,25,50].forEach(v=>{ const y=yOf(v); g.beginPath(); g.moveTo(0,y); g.lineTo(PW,y); g.stroke(); });
+    g.strokeStyle=ink; g.globalAlpha=.5; g.beginPath(); g.moveTo(0,yOf(0)); g.lineTo(PW,yOf(0)); g.stroke(); g.globalAlpha=1;
+    g.fillStyle=mut; g.font='11px DM Mono, monospace'; g.textBaseline='middle'; g.textAlign='left';
+    [[50,'+50'],[25,'+25'],[0,'0'],[-25,'-25'],[-50,'-50']].forEach(([v,t])=>g.fillText(t,PW+6,yOf(v)));
+    g.font='10px Karla, sans-serif'; g.textBaseline='bottom'; g.textAlign='left'; g.fillText('10 s ago',4,H-2); g.textAlign='right'; g.fillText('now',PW-4,H-2);
+    const xOf=t=>PW-(now-t)/TRACE_MS*PW;
+    let prev=null;
     for(const p of trace){
-      const x=W-(now-p.t)/TRACE_MS*W;
-      if(p.onset){ g.strokeStyle=mut; g.lineWidth=2; g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); continue; }
-      const cc=Math.max(-55,Math.min(55,p.c)); const y=H/2-cc/50*(H/2-8);
-      g.fillStyle=Math.abs(p.c)<=S.tol?good:(Math.abs(p.c)<=2*S.tol?brass:bad); g.beginPath(); g.arc(x,y,4,0,Math.PI*2); g.fill();
+      const x=xOf(p.t);
+      if(p.onset){ g.strokeStyle=mut; g.lineWidth=1; g.setLineDash([3,3]); g.beginPath(); g.moveTo(x,PADT); g.lineTo(x,PADT+PH); g.stroke(); g.setLineDash([]); prev=null; continue; }
+      const y=yOf(p.c); const col=Math.abs(p.c)<=S.tol?good:(Math.abs(p.c)<=2*S.tol?brass:bad);
+      if(prev && p.t-prev.t<250){ g.strokeStyle=col; g.lineWidth=2; g.beginPath(); g.moveTo(xOf(prev.t),yOf(prev.c)); g.lineTo(x,y); g.stroke(); }
+      g.fillStyle=col; g.beginPath(); g.arc(x,y,2.5,0,Math.PI*2); g.fill();
+      prev=p;
     }
-    g.fillStyle=mut; g.font='20px DM Mono, monospace'; g.textBaseline='top'; g.fillText('+50',6,4); g.textBaseline='bottom'; g.fillText('-50',6,H-4);
+    if(!trace.length){ g.fillStyle=mut; g.font='12px Karla, sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(stream?'Waiting for a stroke':'Mic is off', PW/2, yOf(30)); }
   }
+  drawTrace(performance.now()); window.addEventListener('resize',()=>drawTrace(performance.now()));
   function strokeSummary(f){
     const c=centsToTarget(f);
     strokeHz.push(f); if(strokeHz.length>6) strokeHz.shift();

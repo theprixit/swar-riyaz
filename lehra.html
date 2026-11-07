@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lehra Saath</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Karla:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#efeee8; --paper:#faf9f5; --ink:#1f2321; --muted:#6b6f69; --line:#d7d6cd;
+  --accent:#8c2f22; --accent-ink:#fff; --brass:#9a7324; --good:#2f6f4e; --chip:#f4f3ee; --sam:#8c2f22; --khali:#b7b5ab;
+  --font-display:"Spectral",Georgia,serif; --font-body:"Karla","Helvetica Neue",Arial,sans-serif; --font-mono:"DM Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#16181a; --paper:#1f2224; --ink:#ece9e0; --muted:#9a9d95; --line:#33373a;
+    --accent:#c24d3b; --brass:#c8a04a; --good:#5db686; --chip:#272a2d; --sam:#c24d3b; --khali:#4a4e52; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px}
+.wrap{max-width:560px;margin:0 auto;display:grid;gap:14px}
+h1{font-family:var(--font-display);font-weight:600;font-size:1.9rem;line-height:1.1;margin:0}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.95rem}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row>*{min-width:0}
+label.sel{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+select,input[type=number]{font:inherit;font-size:1rem;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--ink)}
+input[type=number]{width:6.5em;font-family:var(--font-mono)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:8px;padding:10px 14px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;font-size:1.05rem;padding:14px 18px}
+button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;flex:1;padding:9px 6px;font-size:.9rem}
+.taal{display:flex;flex-wrap:wrap;gap:6px}
+.taal .vib{display:flex;gap:3px;padding:4px;border:1px solid var(--line);border-radius:8px}
+.taal .m{width:34px;height:52px;border-radius:6px;background:var(--chip);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-variant-numeric:tabular-nums}
+.taal .m .n{font-family:var(--font-display);font-size:1.05rem;font-weight:600;line-height:1}
+.taal .m .b{font-family:var(--font-mono);font-size:.62rem;color:var(--muted)}
+.taal .m.on{outline:3px solid var(--brass);outline-offset:-3px}
+.taal .m.sam{background:var(--sam);color:#fff} .taal .m.sam .b{color:#f6e8e5}
+.taal .m.khali{background:var(--khali)}
+.taal .m.sam.on{outline-color:#fff}
+.big{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center}
+.big div{background:var(--chip);border-radius:8px;padding:8px}
+.big .v{font-family:var(--font-mono);font-size:1.5rem;font-variant-numeric:tabular-nums;line-height:1.1}
+.big .l{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.small{font-size:.8rem;color:var(--muted)}
+.notes{font-family:var(--font-mono);font-size:.9rem;line-height:1.7;word-break:break-word}
+.notes b{color:var(--sam);font-weight:500}
+details summary{cursor:pointer;font-weight:700}
+ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Lehra Saath</h1>
+    <p class="sub">A melody that goes round the taal, so you can hear sam while you practise tabla.</p>
+  </header>
+
+  <section class="card">
+    <div class="row">
+      <label class="sel">Lehra
+        <select id="lehraSel"></select>
+      </label>
+      <label class="sel">Sa
+        <select id="saSel"></select>
+      </label>
+      <label class="sel">Fine Sa (Hz)
+        <input type="number" id="saHz" step="0.1" min="60" max="600">
+      </label>
+    </div>
+    <div class="notes" id="notesLine" style="margin-top:10px"></div>
+  </section>
+
+  <section class="card">
+    <div class="taal" id="taal"></div>
+    <div class="big" style="margin-top:12px">
+      <div><div class="v" id="matraV">1</div><div class="l">matra</div></div>
+      <div><div class="v" id="avartV">0</div><div class="l">avartan</div></div>
+      <div><div class="v" id="bpmV">80</div><div class="l">per minute</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <span class="small">Laya</span><span class="small" id="layaName">madhya</span>
+    </div>
+    <input type="range" id="bpm" min="30" max="240" step="1" value="80">
+    <div class="row" style="margin-top:10px">
+      <span class="small">Clicks</span>
+      <div class="seg" id="clickSeg" style="flex:1">
+        <button data-c="sam" aria-pressed="true">Sam only</button>
+        <button data-c="tali">Sam + tali</button>
+        <button data-c="all">Every matra</button>
+        <button data-c="off">Off</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label class="small"><input type="checkbox" id="droneChk" checked> Tanpura under it</label>
+      <label class="small"><input type="checkbox" id="highChk"> Lehra an octave higher</label>
+    </div>
+    <div class="row" style="margin-top:12px;justify-content:center">
+      <button class="primary" id="playBtn">Start</button>
+      <button id="tapBtn">Tap tempo</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>How to use it</summary>
+      <ul>
+        <li>Sam (matra 1) is red. Tali matras show their count, khali shows 0. The cell outlined in brass is the matra sounding now.</li>
+        <li>Start at 60 to 80 for theka. For kaida practice in dugun, keep the lehra at the same tempo and play two bols per matra; don't speed the lehra up.</li>
+        <li>Tap tempo: tap the button four times on the beat and the slider follows.</li>
+        <li>These are simple practice lehras written for this page, one note per matra, following each raga's rules. They are not transcriptions of any recording.</li>
+      </ul>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const KEYS=['Safed 1','Kali 1','Safed 2','Kali 2','Safed 3','Safed 4','Kali 3','Safed 5','Kali 4','Safed 6','Kali 5','Safed 7'];
+  // swar name -> semitones from Sa. Lowercase = komal, M = tivra Ma. Suffix , = lower octave, ' = upper octave. - = hold.
+  const SEMI={S:0,r:1,R:2,g:3,G:4,m:5,M:6,P:7,d:8,D:9,n:10,N:11};
+  function parse(tok){ if(tok==='-') return null; let o=0, t=tok; while(t.endsWith("'")){o++; t=t.slice(0,-1);} while(t.endsWith(',')){o--; t=t.slice(0,-1);} return SEMI[t]+12*o; }
+  const TAALS={
+    teentaal:{name:'Teentaal',n:16,vib:[4,4,4,4],marks:['X','2','0','3']},
+    jhaptaal:{name:'Jhaptaal',n:10,vib:[2,3,2,3],marks:['X','2','0','3']},
+    ektaal:{name:'Ektaal',n:12,vib:[2,2,2,2,2,2],marks:['X','0','2','0','3','4']},
+    rupak:{name:'Rupak',n:7,vib:[3,2,2],marks:['0','2','3']},
+    keherwa:{name:'Keherwa',n:8,vib:[4,4],marks:['X','0']},
+    dadra:{name:'Dadra',n:6,vib:[3,3],marks:['X','0']}
+  };
+  const LEHRAS=[
+    {id:'tt-bhup', taal:'teentaal', raga:'Bhupali', notes:'S R G P D P G R G R S D, S R G R'},
+    {id:'tt-kafi', taal:'teentaal', raga:'Kafi', notes:'S R g m P m g R g R S n, S R g R'},
+    {id:'tt-chandra', taal:'teentaal', raga:'Chandrakauns', notes:'S g m d N d m g m g S N, S g m g'},
+    {id:'jt-kafi', taal:'jhaptaal', raga:'Kafi', notes:'S R g m P m g R S n,'},
+    {id:'et-yaman', taal:'ektaal', raga:'Yaman', notes:'S R G M P M G R G R S N,'},
+    {id:'rp-bhairavi', taal:'rupak', raga:'Bhairavi', notes:'S r g m P g r'},
+    {id:'kh-khamaj', taal:'keherwa', raga:'Khamaj', notes:'S G m P D P m G'},
+    {id:'dd-khamaj', taal:'dadra', raga:'Khamaj', notes:'S G m P m G'}
+  ];
+  const $=id=>document.getElementById(id);
+  const S={lehra:'tt-bhup', saHz:140.6, bpm:80, clicks:'sam', drone:true, high:false};
+  try{ Object.assign(S, JSON.parse(localStorage.getItem('lehra-saath')||'{}')); }catch(e){}
+  function save(){ try{ localStorage.setItem('lehra-saath', JSON.stringify(S)); }catch(e){} }
+  function cur(){ return LEHRAS.find(l=>l.id===S.lehra)||LEHRAS[0]; }
+  function taal(){ return TAALS[cur().taal]; }
+
+  // selects
+  const lehraSel=$('lehraSel');
+  LEHRAS.forEach(l=>{ const o=document.createElement('option'); o.value=l.id; o.textContent=TAALS[l.taal].name+' ('+TAALS[l.taal].n+') · '+l.raga; lehraSel.appendChild(o); });
+  lehraSel.value=S.lehra;
+  const saSel=$('saSel');
+  for(let o=2;o<=4;o++) for(let i=0;i<12;i++){ const op=document.createElement('option'); const hz=440*Math.pow(2,(o*12+i-57)/12); op.value=hz.toFixed(2); op.textContent=NOTE[i]+o+'  '+KEYS[i]; saSel.appendChild(op); }
+  function syncSa(){ let best=null,bd=1e9; [...saSel.options].forEach(o=>{ const d=Math.abs(Math.log2(o.value/S.saHz)); if(d<bd){bd=d;best=o;} }); if(best) saSel.value=best.value; $('saHz').value=S.saHz.toFixed(1); }
+  saSel.addEventListener('change',()=>{ S.saHz=+saSel.value; save(); syncSa(); });
+  $('saHz').addEventListener('change',()=>{ const v=+$('saHz').value; if(v>=60&&v<=600){ S.saHz=v; save(); syncSa(); } });
+  lehraSel.addEventListener('change',()=>{ const was=playing; if(was) stop(); S.lehra=lehraSel.value; save(); renderTaal(); renderNotes(); if(was) start(); });
+  $('bpm').value=S.bpm; $('bpmV').textContent=S.bpm;
+  $('bpm').addEventListener('input',()=>{ S.bpm=+$('bpm').value; $('bpmV').textContent=S.bpm; $('layaName').textContent=S.bpm<60?'vilambit':(S.bpm<120?'madhya':'drut'); save(); });
+  $('layaName').textContent=S.bpm<60?'vilambit':(S.bpm<120?'madhya':'drut');
+  $('clickSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.clicks=b.dataset.c; save(); [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); });
+  [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x.dataset.c===S.clicks));
+  $('droneChk').checked=S.drone; $('highChk').checked=S.high;
+  $('droneChk').addEventListener('change',e=>{ S.drone=e.target.checked; save(); if(playing){ S.drone?startDrone():stopDrone(); } });
+  $('highChk').addEventListener('change',e=>{ S.high=e.target.checked; save(); });
+
+  function renderTaal(){
+    const T=taal(), el=$('taal'); el.innerHTML=''; let m=0;
+    T.vib.forEach((len,vi)=>{
+      const v=document.createElement('div'); v.className='vib';
+      for(let k=0;k<len;k++){ m++; const c=document.createElement('div'); c.className='m'+(m===1&&T.marks[vi]==='X'?' sam':'')+(k===0&&T.marks[vi]==='0'?' khali':''); c.dataset.m=m;
+        c.innerHTML='<span class="n">'+m+'</span><span class="b">'+(k===0?T.marks[vi]:'')+'</span>'; v.appendChild(c); }
+      el.appendChild(v);
+    });
+  }
+  function renderNotes(){
+    const L=cur(), T=taal(), toks=L.notes.split(/\s+/); let out=[], i=0;
+    T.vib.forEach(len=>{ out.push(toks.slice(i,i+len).join(' ')); i+=len; });
+    $('notesLine').innerHTML='<b>'+L.raga+'</b> · '+out.join(' | ')+' |';
+  }
+
+  // audio
+  let ctx=null, master=null, reedWave=null, stringWave=null, playing=false, timer=null, nextTime=0, nextIdx=0, avart=0, sched=[];
+  let droneOn=false, droneTimer=null, droneGain=null;
+  function ensureCtx(){
+    if(ctx){ if(ctx.state==='suspended') ctx.resume(); return ctx; }
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain(); master.gain.value=0.9; const comp=ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+    const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15); reedWave=ctx.createPeriodicWave(re,im);
+    const m=24, re2=new Float32Array(m), im2=new Float32Array(m); for(let k=1;k<m;k++) im2[k]=1/Math.pow(k,0.85); stringWave=ctx.createPeriodicWave(re2,im2);
+    return ctx;
+  }
+  function pluck(freq,t,dur,gv){ const o=ctx.createOscillator(); o.setPeriodicWave(stringWave); o.frequency.value=freq; const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(freq*14,t); f.frequency.exponentialRampToValueAtTime(freq*3,t+dur); const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(gv,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(f); f.connect(g); g.connect(droneGain); o.start(t); o.stop(t+dur+0.05); }
+  function droneCycle(){ if(!droneOn) return; const sa=S.saHz, t=ctx.currentTime+0.05, step=0.85, dur=3.2; pluck(sa*0.75,t,dur,0.07); pluck(sa,t+step,dur,0.06); pluck(sa,t+step*2,dur,0.06); pluck(sa*0.5,t+step*3,dur,0.08); droneTimer=setTimeout(droneCycle,step*4*1000); }
+  function startDrone(){ ensureCtx(); if(!droneGain){ droneGain=ctx.createGain(); droneGain.gain.value=0.9; droneGain.connect(master); } droneOn=true; droneCycle(); }
+  function stopDrone(){ droneOn=false; clearTimeout(droneTimer); }
+
+  function reed(semi,t,dur,vol){
+    const base=S.saHz*(S.high?4:2); const f0=base*Math.pow(2,semi/12);
+    const o=ctx.createOscillator(); o.setPeriodicWave(reedWave); o.frequency.value=f0;
+    const o2=ctx.createOscillator(); o2.setPeriodicWave(reedWave); o2.frequency.value=f0*1.003;
+    const fl=ctx.createBiquadFilter(); fl.type='lowpass'; fl.frequency.value=Math.min(f0*8,6000);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.04); g.gain.setValueAtTime(vol,t+dur-0.06); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(fl); o2.connect(fl); fl.connect(g); g.connect(master); o.start(t); o2.start(t); o.stop(t+dur+0.02); o2.stop(t+dur+0.02);
+  }
+  function click(t,strong){
+    const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(strong?1400:1000,t); o.frequency.exponentialRampToValueAtTime(strong?700:500,t+0.04);
+    const g=ctx.createGain(); g.gain.setValueAtTime(strong?0.35:0.15,t); g.gain.exponentialRampToValueAtTime(0.0001,t+(strong?0.09:0.05));
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.1);
+  }
+  function isTali(m){ const T=taal(); let s=1; for(let i=0;i<T.vib.length;i++){ if(m===s) return T.marks[i]!=='0'; s+=T.vib[i]; } return false; }
+  function isVibStart(m){ const T=taal(); let s=1; for(let i=0;i<T.vib.length;i++){ if(m===s) return true; s+=T.vib[i]; } return false; }
+
+  function schedule(){
+    const L=cur(), T=taal(), toks=L.notes.split(/\s+/), beat=60/S.bpm;
+    while(nextTime<ctx.currentTime+0.25){
+      const m=(nextIdx%T.n)+1;
+      let semi=parse(toks[nextIdx%T.n]);
+      let hold=1; if(semi!==null){ for(let k=1;k<T.n;k++){ if(toks[(nextIdx+k)%T.n]==='-') hold++; else break; } reed(semi,nextTime,beat*hold*0.98,0.22); }
+      const strong=m===1;
+      if(S.clicks==='all' || (S.clicks==='sam'&&strong) || (S.clicks==='tali'&&isVibStart(m)&&(isTali(m)||strong))) click(nextTime,strong);
+      sched.push({t:nextTime,m:m,a:Math.floor(nextIdx/T.n)+1});
+      nextTime+=beat; nextIdx++;
+    }
+  }
+  let raf=0;
+  function tick(){
+    raf=requestAnimationFrame(tick);
+    if(!ctx) return; const now=ctx.currentTime;
+    while(sched.length>1 && sched[1].t<=now) sched.shift();
+    if(sched.length && sched[0].t<=now){ const s=sched[0]; const T=taal();
+      document.querySelectorAll('.taal .m').forEach(c=>c.classList.toggle('on',+c.dataset.m===s.m));
+      $('matraV').textContent=s.m; $('avartV').textContent=s.a; }
+  }
+  function start(){ ensureCtx(); playing=true; nextTime=ctx.currentTime+0.1; nextIdx=0; sched=[]; timer=setInterval(schedule,80); schedule(); if(S.drone) startDrone(); $('playBtn').textContent='Stop'; cancelAnimationFrame(raf); tick(); }
+  function stop(){ playing=false; clearInterval(timer); stopDrone(); $('playBtn').textContent='Start'; cancelAnimationFrame(raf); document.querySelectorAll('.taal .m').forEach(c=>c.classList.remove('on')); $('matraV').textContent='1'; $('avartV').textContent='0'; }
+  $('playBtn').addEventListener('click',()=> playing?stop():start());
+
+  let taps=[];
+  $('tapBtn').addEventListener('click',()=>{ const t=performance.now(); taps=taps.filter(x=>t-x<3000); taps.push(t); if(taps.length>=3){ const iv=(taps[taps.length-1]-taps[0])/(taps.length-1); const b=Math.round(60000/iv); if(b>=30&&b<=240){ S.bpm=b; $('bpm').value=b; $('bpmV').textContent=b; $('layaName').textContent=b<60?'vilambit':(b<120?'madhya':'drut'); save(); } } });
+
+  syncSa(); renderTaal(); renderNotes();
+})();
+</script>
+</body>
+</html>
