@@ -109,7 +109,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     <div class="hz"><span id="hzVal">--</span><small> Hz</small></div>
     <div class="verdict" id="verdict">Start the mic, then strike the dayan.</div>
     <div class="hint" id="hint"></div>
-    <div class="hist" id="hist" style="width:100%;max-width:420px"></div>
+    <canvas id="trace" width="840" height="240" style="width:100%;max-width:420px;height:120px;border:1px solid var(--line);border-radius:8px;background:var(--chip)"></canvas>
+    <div class="row" style="justify-content:center" id="suggestRow" hidden><span class="small" id="suggestTxt"></span><button id="suggestBtn" style="padding:6px 10px;font-size:.85rem"></button></div>
     <div class="row" style="justify-content:center;margin-top:6px">
       <button class="primary" id="micBtn">Start mic</button>
       <button id="refBtn">Play reference</button>
@@ -128,7 +129,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
         <li>Coarse tuning: tap the gatta down with the hammer to raise, up from below to lower. Fine tuning: tap the gajra (the braid) just above the gatta, down to raise, up to lower.</li>
         <li>Get all positions within about 5 cents, then check the open <em>Tun</em> in the middle; it should match too.</li>
         <li>Baya is tuned loosely, an octave below Sa or to lower Pa. Read it with a soft open <em>Ghe</em>, heel off the skin.</li>
-        <li>Each stroke gives one reading, taken from the first second after the hit; the hint line shows how far it moved since the previous stroke. While the reference tone is sounding the mic is ignored, so with the loop on, strike in the silent gap. Note: so the dayan reading as 281 Hz against a 140.6 Hz Sa is in tune, one octave up, which is normal.</li>
+        <li>The needle and the trace follow the sound continuously; a vertical line marks each stroke and the verdict is taken from the first second after it; the hint line shows how far it moved since the previous stroke. While the reference tone is sounding the mic is ignored, so with the loop on, strike in the silent gap. Note: so the dayan reading as 281 Hz against a 140.6 Hz Sa is in tune, one octave up, which is normal.</li>
       </ul>
     </details>
   </section>
@@ -186,26 +187,75 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     return sr/(tau+sh);
   }
   function centsToTarget(f){ return 1200*Math.log2(f/target()); }
-  let recent=[];
+  let recent=[], trace=[], strokeHz=[];
+  const TRACE_MS=10000;
   function loop(){
     raf=requestAnimationFrame(loop);
     analyser.getFloatTimeDomainData(buf);
     const f=nsdfPitch(buf, ctx.sampleRate);
     const now=performance.now();
     $('lvl').style.width=Math.min(100, lastRms*600)+'%';
-    if(now<refUntil){ prevRms=lastRms; return; }
-    if(lastRms>Math.max(0.012, prevRms*3) && now-strokeAt>350){ strokeAt=now; strokeVals=[]; strokeDone=false; $('hint').textContent='...'; }
+    if(now<refUntil){ prevRms=lastRms; drawTrace(now); return; }
+    const onset = lastRms>Math.max(0.012, prevRms*3) && now-strokeAt>300;
+    if(onset){ strokeAt=now; strokeVals=[]; strokeDone=false; recent=[]; trace.push({t:now, onset:true}); }
     prevRms=lastRms;
     const since=now-strokeAt;
-    if(strokeAt && !strokeDone && since>120 && since<900 && f>0) strokeVals.push(f);
-    if(strokeAt && !strokeDone && (since>=900 || strokeVals.length>=8)){
+    if(f>0 && since>60){
+      recent.push(f); if(recent.length>3) recent.shift();
+      const sorted=recent.slice().sort((a,b)=>a-b); const med=sorted[Math.floor(sorted.length/2)];
+      const c=centsToTarget(med);
+      trace.push({t:now, c:c, hz:med});
+      liveShow(med, c); lastGood=now;
+      if(!strokeDone && since>120 && since<900) strokeVals.push(f);
+    } else recent=[];
+    if(strokeAt && !strokeDone && since>=900){
       strokeDone=true;
-      if(strokeVals.length>=3){
-        const sorted=strokeVals.slice().sort((a,b)=>a-b); const med=sorted[Math.floor(sorted.length/2)];
-        show(med, true); lastGood=now;
-      } else if(since>=900){ $('verdict').textContent='No clear pitch in that stroke.'; $('verdict').className='verdict'; $('hint').textContent='Use an open Na on the kinar, one finger, let it ring. Keep the phone 20 to 30 cm away.'; }
+      if(strokeVals.length>=3){ const so=strokeVals.slice().sort((a,b)=>a-b); const med=so[Math.floor(so.length/2)]; strokeSummary(med); }
     }
-    if(lastRms<0.004 && now-lastGood>2500){ setNeedle(hist.length?hist[hist.length-1]:0,false); }
+    if(lastRms<0.004 && now-lastGood>2000){ setNeedle(lastStrokeCents===null?0:Math.max(-50,Math.min(50,lastStrokeCents)), false); }
+    drawTrace(now);
+  }
+  function liveShow(f, c){
+    $('hzVal').textContent=f.toFixed(1);
+    setNeedle(Math.abs(c)>650?(c<0?-50:50):c, true);
+  }
+  function drawTrace(now){
+    const cv=$('trace'), g=cv.getContext('2d'), W=cv.width, H=cv.height;
+    while(trace.length && now-trace[0].t>TRACE_MS) trace.shift();
+    const css=getComputedStyle(document.documentElement);
+    g.clearRect(0,0,W,H);
+    g.fillStyle=css.getPropertyValue('--good').trim(); g.globalAlpha=.18; g.fillRect(0,H/2-H*5/100,W,H*10/100); g.globalAlpha=1;
+    g.strokeStyle=css.getPropertyValue('--line').trim(); g.lineWidth=2;
+    [-50,-25,25,50].forEach(v=>{ const y=H/2-v/50*(H/2-8); g.beginPath(); g.moveTo(0,y); g.lineTo(W,y); g.stroke(); });
+    g.strokeStyle=css.getPropertyValue('--ink').trim(); g.globalAlpha=.5; g.beginPath(); g.moveTo(0,H/2); g.lineTo(W,H/2); g.stroke(); g.globalAlpha=1;
+    const good=css.getPropertyValue('--good').trim(), bad=css.getPropertyValue('--bad').trim(), mut=css.getPropertyValue('--muted').trim();
+    for(const p of trace){
+      const x=W-(now-p.t)/TRACE_MS*W;
+      if(p.onset){ g.strokeStyle=mut; g.lineWidth=2; g.beginPath(); g.moveTo(x,0); g.lineTo(x,H); g.stroke(); continue; }
+      const cc=Math.max(-55,Math.min(55,p.c)); const y=H/2-cc/50*(H/2-8);
+      g.fillStyle=Math.abs(p.c)<=5?good:bad; g.beginPath(); g.arc(x,y,4,0,Math.PI*2); g.fill();
+    }
+    g.fillStyle=mut; g.font='20px DM Mono, monospace'; g.textBaseline='top'; g.fillText('+50',6,4); g.textBaseline='bottom'; g.fillText('-50',6,H-4);
+  }
+  function strokeSummary(f){
+    const c=centsToTarget(f);
+    strokeHz.push(f); if(strokeHz.length>6) strokeHz.shift();
+    show(f, true);
+    suggest();
+  }
+  function suggest(){
+    const row=$('suggestRow'); if(strokeHz.length<2){ row.hidden=true; return; }
+    const so=strokeHz.slice().sort((a,b)=>a-b); const med=so[Math.floor(so.length/2)];
+    const cur=Math.abs(1200*Math.log2(med/target()));
+    if(cur<150){ row.hidden=true; return; }
+    const cands=[]; const names={1:'Sa',1.5:'Pa',1.3333:'Ma',0.5:'Sa',0.75:'Pa'};
+    for(const r of [1,1.5,1.3333]) for(let o=-2;o<=2;o++){ const f=S.saHz*r*Math.pow(2,o); cands.push({r,o,f,d:Math.abs(1200*Math.log2(med/f))}); }
+    cands.sort((a,b)=>a.d-b.d); const b=cands[0];
+    if(b.d>=cur-20){ row.hidden=true; return; }
+    $('suggestTxt').textContent='Drum is reading about '+med.toFixed(0)+' Hz. Nearest sensible target: '+names[b.r]+' at '+b.f.toFixed(1)+' Hz ('+Math.round(b.d)+' cents away).';
+    const btn=$('suggestBtn'); btn.textContent='Use '+names[b.r]+' '+b.f.toFixed(0)+' Hz';
+    btn.onclick=()=>{ S.ratio=b.r; S.oct=b.o; save(); [...$('modeSeg').children].forEach(x=>x.setAttribute('aria-pressed',+x.dataset.r===S.ratio)); [...$('octSeg').children].forEach(x=>x.setAttribute('aria-pressed',(x.dataset.o==='auto'?'auto':+x.dataset.o)===S.oct)); renderTarget(); row.hidden=true; lastStrokeCents=null; };
+    row.hidden=false;
   }
   function show(f, live){
     const c=centsToTarget(f);
@@ -217,15 +267,12 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       h.textContent=Math.abs(oc)>=1?'If the drum really sounds that far off, change Target octave above. Otherwise strike again, once, on the kinar.':'Coarse tune with the hammer on the gatta, then come back.';
       setNeedle(c<0?-50:50, live); return;
     }
-    setNeedle(c, live);
     const delta=lastStrokeCents===null?'':'  (' + (c-lastStrokeCents>=0?'+':'') + (c-lastStrokeCents).toFixed(0) + ' since last stroke)';
     lastStrokeCents=c;
     if(Math.abs(c)<=5){ v.textContent='In sur'; v.className='verdict good'; h.textContent=(c>=0?'+':'')+c.toFixed(1)+' cents'+delta; }
     else if(c<0){ v.textContent='Flat by '+Math.abs(c).toFixed(0)+' cents'; v.className='verdict flat'; h.textContent=(S.ratio<1?'Tighten: tap the gatta down.':'Raise it: tap the gatta (or gajra above it) down.')+delta; }
     else { v.textContent='Sharp by '+c.toFixed(0)+' cents'; v.className='verdict sharp'; h.textContent=(S.ratio<1?'Loosen: tap the gatta up from below.':'Lower it: tap the gatta up from below.')+delta; }
-    if(live && (!hist.length || Math.abs(hist[hist.length-1]-c)>1 || performance.now()-lastGood>800)){ hist.push(c); if(hist.length>24) hist.shift(); renderHist(); }
   }
-  function renderHist(){ const el=$('hist'); el.innerHTML=''; hist.forEach(c=>{ const i=document.createElement('i'); i.style.height=Math.max(2,Math.min(28,28-Math.min(28,Math.abs(c)*0.5)))+'px'; i.className=Math.abs(c)<=5?'g':'b'; el.appendChild(i); }); }
 
   async function startMic(){
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ setStatus('This browser or page location does not allow the microphone. Open the page over https (for example GitHub Pages) or in Chrome on a computer.', 'bad'); return; }
