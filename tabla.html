@@ -52,6 +52,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
 .hist{display:flex;gap:3px;height:28px;align-items:flex-end}
 .hist i{flex:1;background:var(--line);border-radius:2px 2px 0 0;min-height:2px}
 .hist i.g{background:var(--good)} .hist i.b{background:var(--bad)}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--brass);transition:width .08s}
 </style>
 </head>
 <body>
@@ -104,6 +105,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       <button id="refBtn">Play reference</button>
     </div>
     <div class="status" id="status"></div>
+    <div style="width:100%;max-width:420px"><div class="small" style="margin-bottom:4px">Mic level</div><div class="bar"><i id="lvl"></i></div></div>
   </section>
 
   <section class="card">
@@ -147,18 +149,18 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function setNeedle(cents, live){ const c=Math.max(-50,Math.min(50,cents)); const a=(c/50)*Math.PI/2; const n=$('needle'); n.setAttribute('x2',210+Math.sin(a)*90); n.setAttribute('y2',130-Math.cos(a)*90); n.setAttribute('opacity',live?'1':'.25'); }
 
   // audio
-  let ctx=null, stream=null, analyser=null, raf=0, buf=null, lastGood=0, hist=[];
+  let ctx=null, stream=null, analyser=null, raf=0, buf=null, lastGood=0, hist=[], lastRms=0, sink=null;
   function ensureCtx(){ if(!ctx){ ctx=new (window.AudioContext||window.webkitAudioContext)(); } if(ctx.state==='suspended') ctx.resume(); return ctx; }
   function nsdfPitch(x, sr){
     const N=x.length, minLag=Math.floor(sr/1200), maxLag=Math.min(Math.floor(sr/50), N-2);
-    let e=0; for(let i=0;i<N;i++) e+=x[i]*x[i]; if(Math.sqrt(e/N)<0.01) return 0;
+    let e=0; for(let i=0;i<N;i++) e+=x[i]*x[i]; lastRms=Math.sqrt(e/N); if(lastRms<0.004) return 0;
     const nsdf=new Float32Array(maxLag+1);
     for(let t=minLag;t<=maxLag;t++){ let acf=0,m=0; for(let i=0;i<N-t;i++){ const a=x[i],b=x[i+t]; acf+=a*b; m+=a*a+b*b; } nsdf[t]=m?2*acf/m:0; }
     const peaks=[]; let i=minLag; while(i<=maxLag&&nsdf[i]>0) i++;
-    for(;i<maxLag;i++) if(nsdf[i]>nsdf[i-1]&&nsdf[i]>=nsdf[i+1]&&nsdf[i]>0.5) peaks.push(i);
+    for(;i<maxLag;i++) if(nsdf[i]>nsdf[i-1]&&nsdf[i]>=nsdf[i+1]&&nsdf[i]>0.4) peaks.push(i);
     if(!peaks.length) return 0;
     let best=0; for(const p of peaks) if(nsdf[p]>best) best=nsdf[p];
-    if(best<0.8) return 0;
+    if(best<0.65) return 0;
     const tau=peaks.find(p=>nsdf[p]>=0.92*best);
     const a=nsdf[tau-1],b=nsdf[tau],c=nsdf[tau+1],den=a-2*b+c; const sh=den?0.5*(a-c)/den:0;
     return sr/(tau+sh);
@@ -170,12 +172,14 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     analyser.getFloatTimeDomainData(buf);
     const f=nsdfPitch(buf, ctx.sampleRate);
     const now=performance.now();
+    $('lvl').style.width=Math.min(100, lastRms*600)+'%';
+    if(lastRms>0.004 && f===0 && now-lastGood>700){ $('hint').textContent='Hearing sound, no steady pitch yet. Strike once on the kinar and let it ring.'; }
     if(f>0){
       recent.push(f); if(recent.length>5) recent.shift();
       if(recent.length>=3){
         const sorted=recent.slice().sort((a,b)=>a-b); const med=sorted[Math.floor(sorted.length/2)];
         const spread=Math.abs(1200*Math.log2(sorted[sorted.length-1]/sorted[0]));
-        if(spread<30){ show(med, true); lastGood=now; }
+        if(spread<45){ show(med, true); lastGood=now; }
       }
     } else {
       recent=[];
@@ -198,11 +202,13 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ setStatus('This browser or page location does not allow the microphone. Open the page over https (for example GitHub Pages) or in Chrome on a computer.', 'bad'); return; }
     try{
       ensureCtx();
-      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false}});
       const src=ctx.createMediaStreamSource(stream);
       analyser=ctx.createAnalyser(); analyser.fftSize=4096; analyser.smoothingTimeConstant=0;
       src.connect(analyser); buf=new Float32Array(analyser.fftSize);
-      $('micBtn').textContent='Stop mic'; setStatus('Listening. Strike the drum.', 'good');
+      sink=ctx.createGain(); sink.gain.value=0; analyser.connect(sink); sink.connect(ctx.destination);
+      if(ctx.state!=='running') await ctx.resume();
+      $('micBtn').textContent='Stop mic'; setStatus('Listening at '+ctx.sampleRate+' Hz. Strike the drum.', 'good');
       loop();
     }catch(e){ setStatus('Microphone refused: '+(e&&e.name||e)+'. Allow the mic for this page and try again.', 'bad'); }
   }
