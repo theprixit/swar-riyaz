@@ -83,6 +83,15 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
         <button data-r="0.75">Baya: Pa (low)</button>
       </div>
     </div>
+    <div style="margin-top:12px">
+      <div class="small" style="margin-bottom:6px">Target octave</div>
+      <div class="seg" id="octSeg">
+        <button data-o="auto" aria-pressed="true">Auto (drum range)</button>
+        <button data-o="0">Same as Sa</button>
+        <button data-o="1">One up</button>
+        <button data-o="-1">One down</button>
+      </div>
+    </div>
     <div class="target" style="margin-top:10px" id="targetLine"></div>
   </section>
 
@@ -130,8 +139,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const KEYS=['Safed 1','Kali 1','Safed 2','Kali 2','Safed 3','Safed 4','Kali 3','Safed 5','Kali 4','Safed 6','Kali 5','Safed 7'];
   const $=id=>document.getElementById(id);
-  const S={saHz:140.6, ratio:1};
-  try{ const s=JSON.parse(localStorage.getItem('tabla-sur')||'{}'); if(s.saHz) S.saHz=s.saHz; if(s.ratio) S.ratio=s.ratio; }catch(e){}
+  const S={saHz:140.6, ratio:1, oct:'auto'};
+  try{ const s=JSON.parse(localStorage.getItem('tabla-sur')||'{}'); if(s.saHz) S.saHz=s.saHz; if(s.ratio) S.ratio=s.ratio; if(s.oct!==undefined) S.oct=s.oct; }catch(e){}
   function save(){ try{ localStorage.setItem('tabla-sur', JSON.stringify(S)); }catch(e){} }
 
   const saSel=$('saSel');
@@ -141,9 +150,18 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   $('saHz').addEventListener('change',()=>{ const v=+$('saHz').value; if(v>=60&&v<=600){ S.saHz=v; save(); syncSel(); renderTarget(); } });
   $('modeSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.ratio=+b.dataset.r; save(); [...$('modeSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); renderTarget(); });
   [...$('modeSeg').children].forEach(x=>x.setAttribute('aria-pressed',+x.dataset.r===S.ratio));
-  function target(){ return S.saHz*S.ratio; }
+  $('octSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.oct=b.dataset.o==='auto'?'auto':+b.dataset.o; save(); [...$('octSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); renderTarget(); });
+  [...$('octSeg').children].forEach(x=>x.setAttribute('aria-pressed',(x.dataset.o==='auto'?'auto':+x.dataset.o)===S.oct));
+  function target(){
+    let f=S.saHz*S.ratio;
+    if(S.oct==='auto'){
+      const lo=S.ratio<1?95:225, hi=S.ratio<1?190:450;
+      let guard=0; while(f<lo&&guard++<4) f*=2; guard=0; while(f>hi&&guard++<4) f/=2;
+    } else f*=Math.pow(2,S.oct);
+    return f;
+  }
   function noteOf(f){ const n=Math.round(12*Math.log2(f/440))+69; return NOTE[((n%12)+12)%12]+(Math.floor(n/12)-1); }
-  function renderTarget(){ const t=target(); $('targetLine').innerHTML='target <b>'+t.toFixed(1)+' Hz</b> ('+noteOf(t)+'), any octave'; }
+  function renderTarget(){ const t=target(); const base=S.saHz*S.ratio; const oc=Math.round(Math.log2(t/base)); $('targetLine').innerHTML='target <b>'+t.toFixed(1)+' Hz</b> ('+noteOf(t)+')'+(oc?', '+Math.abs(oc)+' octave'+(Math.abs(oc)>1?'s':'')+(oc>0?' above':' below')+' your Sa':', same octave as your Sa'); }
 
   // gauge
   const ticks=$('ticks'); for(let c=-50;c<=50;c+=10){ const a=(c/50)*Math.PI/2; const x1=210+Math.sin(a)*172,y1=130-Math.cos(a)*172,x2=210+Math.sin(a)*(c%50?166:160),y2=130-Math.cos(a)*(c%50?166:160); const l=document.createElementNS('http://www.w3.org/2000/svg','line'); l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2); ticks.appendChild(l); }
@@ -167,7 +185,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     const a=nsdf[tau-1],b=nsdf[tau],c=nsdf[tau+1],den=a-2*b+c; const sh=den?0.5*(a-c)/den:0;
     return sr/(tau+sh);
   }
-  function centsToTarget(f){ const t=target(); let r=f/t; while(r>Math.SQRT2) r/=2; while(r<Math.SQRT1_2) r*=2; return 1200*Math.log2(r); }
+  function centsToTarget(f){ return 1200*Math.log2(f/target()); }
   let recent=[];
   function loop(){
     raf=requestAnimationFrame(loop);
@@ -191,8 +209,14 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function show(f, live){
     const c=centsToTarget(f);
     $('hzVal').textContent=f.toFixed(1);
-    setNeedle(c, live);
     const v=$('verdict'), h=$('hint');
+    if(Math.abs(c)>650){
+      const oc=Math.round(c/1200);
+      v.textContent=(oc===0?(c<0?'Far flat':'Far sharp'):'Reading '+Math.abs(oc)+' octave'+(Math.abs(oc)>1?'s':'')+(oc>0?' above':' below')+' target'); v.className='verdict '+(c<0?'flat':'sharp');
+      h.textContent=Math.abs(oc)>=1?'If the drum really sounds that far off, change Target octave above. Otherwise strike again, once, on the kinar.':'Coarse tune with the hammer on the gatta, then come back.';
+      setNeedle(c<0?-50:50, live); return;
+    }
+    setNeedle(c, live);
     if(Math.abs(c)<=5){ v.textContent='In sur'; v.className='verdict good'; h.textContent=(c>=0?'+':'')+c.toFixed(1)+' cents'; }
     else if(c<0){ v.textContent='Flat by '+Math.abs(c).toFixed(0)+' cents'; v.className='verdict flat'; h.textContent=S.ratio<1?'Tighten a little: tap the gatta down.':'Raise it: tap the gatta (or gajra above it) down.'; }
     else { v.textContent='Sharp by '+c.toFixed(0)+' cents'; v.className='verdict sharp'; h.textContent=S.ratio<1?'Loosen a little: tap the gatta up from below.':'Lower it: tap the gatta up from below.'; }
