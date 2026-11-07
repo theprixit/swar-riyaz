@@ -29,6 +29,7 @@ label.sel{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(
 select,input[type=number]{font:inherit;font-size:1rem;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--ink)}
 input[type=number]{width:7.5em;font-family:var(--font-mono)}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:8px;padding:10px 14px}
+button[aria-pressed="true"]{background:var(--brass);color:#fff;border-color:var(--brass)}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;font-size:1.05rem;padding:14px 18px}
 button:disabled{opacity:.5;cursor:default}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
@@ -103,6 +104,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     <div class="row" style="justify-content:center;margin-top:6px">
       <button class="primary" id="micBtn">Start mic</button>
       <button id="refBtn">Play reference</button>
+      <button id="loopBtn" aria-pressed="false">Loop reference</button>
     </div>
     <div class="status" id="status"></div>
     <div style="width:100%;max-width:420px"><div class="small" style="margin-bottom:4px">Mic level</div><div class="bar"><i id="lvl"></i></div></div>
@@ -216,12 +218,21 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   $('micBtn').addEventListener('click',()=> stream?stopMic():startMic());
   function setStatus(m,c){ const s=$('status'); s.textContent=m; s.className='status'+(c?' '+c:''); }
 
-  $('refBtn').addEventListener('click',()=>{
+  let refWave=null;
+  function playRef(){
     ensureCtx(); const t=ctx.currentTime, f=target();
-    const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15);
-    const w=ctx.createPeriodicWave(re,im); const o=ctx.createOscillator(); o.setPeriodicWave(w); o.frequency.value=f;
+    if(!refWave){ const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15); refWave=ctx.createPeriodicWave(re,im); }
+    const o=ctx.createOscillator(); o.setPeriodicWave(refWave); o.frequency.value=f;
     const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.25,t+0.1); g.gain.setValueAtTime(0.25,t+1.8); g.gain.exponentialRampToValueAtTime(0.0001,t+2.2);
     o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+2.3);
+  }
+  $('refBtn').addEventListener('click', playRef);
+  let loopTimer=null;
+  function stopLoop(){ clearInterval(loopTimer); loopTimer=null; $('loopBtn').setAttribute('aria-pressed','false'); $('loopBtn').textContent='Loop reference'; }
+  $('loopBtn').addEventListener('click',()=>{
+    if(loopTimer){ stopLoop(); return; }
+    playRef(); loopTimer=setInterval(playRef, 3200);
+    $('loopBtn').setAttribute('aria-pressed','true'); $('loopBtn').textContent='Stop loop';
   });
 
   $('capBtn').addEventListener('click', async ()=>{
