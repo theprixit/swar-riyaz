@@ -220,7 +220,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       const idx=((semi%12)+12)%12, oct=Math.floor(semi/12), rate=Math.pow(2,oct)*(S.high?2:1)*(S.saHz/bank.saHz);
       const b=bank.buffers[idx]; if(b){
         const src=ctx.createBufferSource(); src.buffer=b; src.playbackRate.value=rate; src.loop=true; src.loopStart=b._loopStart||0.2; src.loopEnd=b._loopEnd||b.duration;
-        const g=ctx.createGain(); const e=envelope(g,t,dur,0.8);
+        const g=ctx.createGain(); const e=envelope(g,t,dur,0.8*(b._gain||1));
         const off=(b._loopStart||0.2)+0.12+Math.random()*0.25;
         src.connect(g); g.connect(voice); src.start(e.start, Math.min(off, b.duration-0.3)); src.stop(e.end+0.02); track(src,e.start); return;
       }
@@ -235,11 +235,11 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   // Rebuild a sample so it can loop without a click: keep the opening, then a body whose end is crossfaded into its start.
   function makeLoopable(b){
     const sr=b.sampleRate, d=b.getChannelData(0), n=d.length;
-    const ls=Math.floor(sr*0.20), le=Math.min(Math.floor(sr*1.45), n-Math.floor(sr*0.10)), xf=Math.floor(sr*0.08);
+    const xf=Math.floor(sr*0.22), ls=Math.floor(sr*0.20), le=Math.min(Math.floor(sr*1.35), n-xf-Math.floor(sr*0.02));
     if(le-ls<sr*0.4) return b;
     const out=new Float32Array(le);
     out.set(d.subarray(0,le));
-    for(let i=0;i<xf;i++){ const w=i/xf; out[ls+i]=d[ls+i]*w + d[le+i]*(1-w); }
+    for(let i=0;i<xf;i++){ const w=Math.sin((i/xf)*Math.PI/2), v=Math.cos((i/xf)*Math.PI/2); out[ls+i]=d[ls+i]*w + d[le+i]*v; }
     const nb=new AudioBuffer({length:le, sampleRate:sr, numberOfChannels:1}); nb.copyToChannel(out,0);
     nb._loopStart=ls/sr; nb._loopEnd=le/sr;
     return nb;
@@ -262,7 +262,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     try{
       const r=await fetch('bank.json'); if(!r.ok) throw 0; const j=await r.json();
       const dec=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(1, 1, 44100);
-      const buffers={}; for(const n of j.notes){ buffers[n.semi]=makeLoopable(await dec.decodeAudioData(b64buf(n.wav))); }
+      const buffers={}; for(const n of j.notes){ const b=makeLoopable(await dec.decodeAudioData(b64buf(n.wav))); b._gain=n.gain||1; buffers[n.semi]=b; }
       bank={saHz:j.saHz, buffers};
       $('voiceLine').textContent='Voice: your harmonium (recorded Sa '+j.saHz.toFixed(1)+' Hz). Sa above is used only for the tanpura; the lehra is shifted to match it.';
     }catch(e){ bank=null; $('voiceLine').textContent='Voice: synth reed (harmonium samples not found).'; }
