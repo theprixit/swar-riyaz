@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Swar Pehchan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,500;0,600;1,400&family=Karla:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column, phone first. Drone bar on top, question card, answer grid of 12 chips, sound bank, score strip. */
+:root{
+  --bg:#efeee8;
+  --paper:#faf9f5;
+  --ink:#1f2321;
+  --muted:#6b6f69;
+  --line:#d7d6cd;
+  --accent:#8c2f22;
+  --accent-ink:#ffffff;
+  --brass:#9a7324;
+  --good:#2f6f4e;
+  --bad:#a63a2b;
+  --chip:#f4f3ee;
+  --chip-on:#1f2321;
+  --font-display:"Spectral",Georgia,"Times New Roman",serif;
+  --font-body:"Karla","Helvetica Neue",Arial,sans-serif;
+  --font-mono:"DM Mono","SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181a; --paper:#1f2224; --ink:#ece9e0; --muted:#9a9d95; --line:#33373a;
+    --accent:#c24d3b; --accent-ink:#ffffff; --brass:#c8a04a; --good:#5db686; --bad:#e06a56;
+    --chip:#272a2d; --chip-on:#ece9e0; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181a; --paper:#1f2224; --ink:#ece9e0; --muted:#9a9d95; --line:#33373a;
+  --accent:#c24d3b; --accent-ink:#ffffff; --brass:#c8a04a; --good:#5db686; --bad:#e06a56;
+  --chip:#272a2d; --chip-on:#ece9e0; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:18px 40px}
+.wrap{max-width:560px;margin:0 auto;display:grid;gap:14px}
+h1{font-family:var(--font-display);font-weight:600;font-size:1.9rem;line-height:1.1;margin:0;text-wrap:balance}
+h2{font-family:var(--font-display);font-weight:600;font-size:1.15rem;margin:0}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.95rem}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row>*{min-width:0}
+label.sel{display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+select{font:inherit;font-size:1rem;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--ink)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:8px;padding:10px 14px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;font-size:1.05rem;padding:14px 18px}
+button:disabled{opacity:.5;cursor:default}
+.drone{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.drone .state{font-family:var(--font-mono);font-size:.85rem;color:var(--muted)}
+.drone .state b{color:var(--brass);font-weight:500}
+.pool{display:flex;flex-wrap:wrap;gap:6px}
+.pool button{padding:6px 10px;font-size:.85rem;border-radius:999px}
+.pool button[aria-pressed="true"]{background:var(--chip-on);color:var(--paper);border-color:var(--chip-on)}
+.pool .preset{font-weight:700}
+.q{display:grid;gap:12px;justify-items:center;text-align:center;padding-block:8px}
+.q .prompt{font-family:var(--font-display);font-size:1.35rem;font-weight:500;min-height:1.4em}
+.q .reveal{font-family:var(--font-display);font-size:2.6rem;line-height:1;font-weight:600;min-height:1em}
+.q .reveal.good{color:var(--good)} .q .reveal.bad{color:var(--bad)}
+.q .key{font-family:var(--font-mono);font-size:.9rem;color:var(--muted);min-height:1.3em}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.grid button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border-radius:8px;line-height:1.1}
+.grid button .n{font-family:var(--font-display);font-size:1.3rem;font-weight:600}
+.grid button .v{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.grid button.hit{background:var(--good);border-color:var(--good);color:#fff}
+.grid button.hit .v{color:#f3f3f3}
+.grid button.miss{background:var(--bad);border-color:var(--bad);color:#fff}
+.grid button.miss .v{color:#f3f3f3}
+.grid button.hidden-swar{visibility:hidden}
+.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.score{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.score div{background:var(--chip);border-radius:8px;padding:8px}
+.score .big{font-family:var(--font-mono);font-size:1.4rem;font-variant-numeric:tabular-nums}
+.score .lbl{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:.9rem;font-variant-numeric:tabular-nums}
+td,th{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left}
+th{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+td.num{text-align:right;font-family:var(--font-mono)}
+td.ok{color:var(--good);font-weight:700} td.off{color:var(--bad);font-weight:700}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--good)}
+details summary{cursor:pointer;font-weight:700}
+.tip{font-size:.9rem;color:var(--muted)}
+.small{font-size:.8rem;color:var(--muted)}
+.status{font-family:var(--font-mono);font-size:.85rem;margin-top:8px;min-height:1.3em}
+.status.good{color:var(--good)} .status.bad{color:var(--bad)}
+ol{padding-left:20px;margin:8px 0}
+ol li{margin-bottom:4px}
+input[type=file]{font:inherit;font-size:.9rem;max-width:100%}
+.tbl{overflow-x:auto}
+.tbl button{padding:3px 8px;font-size:.8rem}
+@media (prefers-reduced-motion:no-preference){ .q .reveal{transition:color .2s} }
+@media (max-width:360px){ .grid{grid-template-columns:repeat(3,1fr)} }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Swar Pehchan</h1>
+    <p class="sub">Tanpura on your Sa. A random swar plays. Name it before you look.</p>
+  </header>
+
+  <section class="card drone">
+    <div>
+      <div class="row">
+        <label class="sel">Sa
+          <select id="saSel"></select>
+        </label>
+        <label class="sel">Register
+          <select id="octSel">
+            <option value="1">Middle</option>
+            <option value="0.5">Low (male voice)</option>
+          </select>
+        </label>
+      </div>
+      <div class="state" id="droneState">drone <b>off</b></div>
+    </div>
+    <button id="droneBtn">Start tanpura</button>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <strong>Swars in the test</strong>
+      <span class="row">
+        <button class="preset" id="pShuddh">Shuddh 7</button>
+        <button class="preset" id="pAll">All 12</button>
+      </span>
+    </div>
+    <div class="pool" id="pool" style="margin-top:10px"></div>
+    <p class="small" style="margin:10px 0 0">Tap a swar to include or drop it. Start with the 7, add komal Ga and Ni next, then the rest.</p>
+  </section>
+
+  <section class="card q">
+    <div class="prompt" id="prompt">Press play, then sing it before you answer.</div>
+    <div class="reveal" id="reveal"></div>
+    <div class="key" id="keyLine"></div>
+    <div class="actions">
+      <button class="primary" id="playBtn">Play a swar</button>
+      <button id="replayBtn" hidden>Replay</button>
+      <button id="nextBtn" hidden>Next</button>
+    </div>
+    <label class="small"><input type="checkbox" id="saFirst" checked> Play Sa before the swar</label>
+  </section>
+
+  <section class="card">
+    <div class="grid" id="grid"></div>
+    <p class="tip" style="margin:10px 0 0" id="gridTip">After you answer, tapping any swar plays it, so you can hear the gap.</p>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2>Your harmonium's sound</h2>
+      <label class="small" id="useBankLabel" hidden><input type="checkbox" id="useBank" checked> Use it in the test</label>
+    </div>
+    <div class="status" id="bankStatus">Sound: synth reed. No recording saved yet.</div>
+    <details style="margin-top:8px" id="recDetails">
+      <summary>Record and upload your 12 keys</summary>
+      <ol>
+        <li>Open your phone's voice recorder. Hold the phone 30 to 40 cm from the grille, main stop pulled, drones pushed in.</li>
+        <li>Steady bellows. Play Sa, hold about 2 seconds, lift, wait 1 second of silence.</li>
+        <li>Then each next key going up, one at a time, same way: komal Re, Re, komal Ga, Ga, Ma, tivra Ma, Pa, komal Dha, Dha, komal Ni, Ni. Twelve notes, in order. Upper Sa at the end is optional.</li>
+        <li>Stop recording and pick the file below. The page splits it, checks the pitch of every key against your Sa, and tells you if a key is off or missing.</li>
+      </ol>
+      <input type="file" id="recFile" accept="audio/*,video/*,.m4a,.mp3,.wav,.aac,.ogg,.webm,.mov,.mp4">
+      <div class="row" style="margin-top:8px" id="anRow" hidden>
+        <button class="primary" id="anBtn" style="font-size:.95rem;padding:10px 14px">Analyse recording</button>
+        <span class="small" id="anFileName"></span>
+      </div>
+      <p class="small" style="margin:8px 0 0">Voice Memos (.m4a), .mp3 and .wav read instantly. A video (.mov, .mp4) is read by playing it through once, so keep the page open while it runs.</p>
+    </details>
+    <div class="status" id="anStatus"></div>
+    <div class="tbl" id="anTable" hidden>
+      <table><thead><tr><th>#</th><th>Expected</th><th class="num">Hz</th><th class="num">Cents</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="row" style="margin-top:10px" id="bankActions" hidden>
+      <button class="primary" id="saveBank" style="font-size:.95rem;padding:10px 14px">Save to trainer</button>
+    </div>
+    <div class="row" style="margin-top:10px" id="bankRemoveRow" hidden>
+      <button id="removeBank" style="font-size:.85rem;padding:6px 10px">Remove saved recording</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="score">
+      <div><div class="big" id="sCorrect">0</div><div class="lbl">correct</div></div>
+      <div><div class="big" id="sTotal">0</div><div class="lbl">asked</div></div>
+      <div><div class="big" id="sStreak">0</div><div class="lbl">streak</div></div>
+    </div>
+    <details style="margin-top:12px">
+      <summary>Per-swar accuracy (all time)</summary>
+      <table id="statTable"><thead><tr><th>Swar</th><th style="width:40%"></th><th class="num">Right</th><th class="num">Asked</th></tr></thead><tbody></tbody></table>
+      <div class="row" style="margin-top:8px;justify-content:space-between">
+        <span class="small">Saved on this phone only.</span>
+        <button id="resetBtn" style="font-size:.85rem;padding:6px 10px">Reset stats</button>
+      </div>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+  // ---------- data ----------
+  const SWARS = [
+    {i:0, n:'Sa',  v:'shuddh', key:'S'},
+    {i:1, n:'Re',  v:'komal',  key:'r'},
+    {i:2, n:'Re',  v:'shuddh', key:'R'},
+    {i:3, n:'Ga',  v:'komal',  key:'g'},
+    {i:4, n:'Ga',  v:'shuddh', key:'G'},
+    {i:5, n:'Ma',  v:'shuddh', key:'m'},
+    {i:6, n:'Ma',  v:'tivra',  key:'M'},
+    {i:7, n:'Pa',  v:'shuddh', key:'P'},
+    {i:8, n:'Dha', v:'komal',  key:'d'},
+    {i:9, n:'Dha', v:'shuddh', key:'D'},
+    {i:10,n:'Ni',  v:'komal',  key:'n'},
+    {i:11,n:'Ni',  v:'shuddh', key:'N'}
+  ];
+  const SHUDDH = [0,2,4,5,7,9,11];
+  const KEYS = ['Safed 1','Kali 1','Safed 2','Kali 2','Safed 3','Safed 4','Kali 3','Safed 5','Kali 4','Safed 6','Kali 5','Safed 7'];
+  const NOTE = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const SA_OPTS = [
+    ['Safed 1 (C)',0],['Kali 1 (C#)',1],['Safed 2 (D)',2],['Kali 2 (D#)',3],['Safed 3 (E)',4],['Safed 4 (F)',5],
+    ['Kali 3 (F#)',6],['Safed 5 (G)',7],['Kali 4 (G#)',8],['Safed 6 (A)',9],['Kali 5 (A#)',10],['Safed 7 (B)',11]
+  ];
+  const C4 = 261.626;
+  const BANK_SR = 22050, NOTE_LEN = 1.6;
+
+  // ---------- state ----------
+  const S = {
+    saIdx: 1, oct: 1, pool: new Set(SHUDDH), target: null, answered: false,
+    correct: 0, total: 0, streak: 0, stats: {},
+    bank: null, useBank: true, bankId: null,
+    analysis: null
+  };
+  try{
+    const saved = JSON.parse(localStorage.getItem('swar-trainer')||'{}');
+    if(saved.stats) S.stats = saved.stats;
+    if(Number.isInteger(saved.saIdx)) S.saIdx = saved.saIdx;
+    if(saved.oct) S.oct = saved.oct;
+    if(Array.isArray(saved.pool) && saved.pool.length>1) S.pool = new Set(saved.pool);
+    if(typeof saved.useBank === 'boolean') S.useBank = saved.useBank;
+    if(saved.bankId) S.bankId = saved.bankId;
+  }catch(e){}
+  function save(){
+    try{ localStorage.setItem('swar-trainer', JSON.stringify({stats:S.stats, saIdx:S.saIdx, oct:S.oct, pool:[...S.pool], useBank:S.useBank, bankId:S.bankId})); }catch(e){}
+  }
+  function bankActive(){ return !!(S.bank && S.useBank); }
+  function saHz(){ return bankActive() ? S.bank.saHz : C4 * Math.pow(2, S.saIdx/12) * S.oct; }
+  function hz(semi){ return saHz() * Math.pow(2, semi/12); }
+
+  // ---------- audio ----------
+  let ctx = null, master = null, reedWave = null, stringWave = null;
+  function ensureCtx(){
+    if(ctx) { if(ctx.state==='suspended') ctx.resume(); return ctx; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    master = ctx.createGain(); master.gain.value = 0.9;
+    const comp = ctx.createDynamicsCompressor();
+    master.connect(comp); comp.connect(ctx.destination);
+    const n = 16, re = new Float32Array(n), im = new Float32Array(n);
+    for(let k=1;k<n;k++){ im[k] = (k%2 ? 1 : 0.6) / Math.pow(k, 1.15); }
+    reedWave = ctx.createPeriodicWave(re, im, {disableNormalization:false});
+    const m = 24, re2 = new Float32Array(m), im2 = new Float32Array(m);
+    for(let k=1;k<m;k++){ im2[k] = 1/Math.pow(k, 0.85); }
+    stringWave = ctx.createPeriodicWave(re2, im2);
+    return ctx;
+  }
+
+  let droneOn = false, droneTimer = null, droneGain = null;
+  function pluck(freq, t, dur, gainVal){
+    const o = ctx.createOscillator(); o.setPeriodicWave(stringWave); o.frequency.value = freq;
+    const f = ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(freq*14, t); f.frequency.exponentialRampToValueAtTime(freq*3, t+dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gainVal, t+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(f); f.connect(g); g.connect(droneGain);
+    o.start(t); o.stop(t+dur+0.05);
+  }
+  function droneCycle(){
+    if(!droneOn) return;
+    const sa = saHz(), t = ctx.currentTime + 0.05, step = 0.85, dur = 3.2;
+    pluck(sa*0.75, t, dur, 0.09);
+    pluck(sa, t+step, dur, 0.08);
+    pluck(sa, t+step*2, dur, 0.08);
+    pluck(sa*0.5, t+step*3, dur, 0.1);
+    droneTimer = setTimeout(droneCycle, step*4*1000);
+  }
+  function startDrone(){
+    ensureCtx();
+    if(!droneGain){ droneGain = ctx.createGain(); droneGain.gain.value = 0.9; droneGain.connect(master); }
+    droneOn = true; droneCycle(); renderDrone();
+  }
+  function stopDrone(){ droneOn = false; clearTimeout(droneTimer); renderDrone(); }
+  function renderDrone(){
+    const o = bankActive() ? ('your harmonium, '+S.bank.saHz.toFixed(1)+' Hz') : SA_OPTS[S.saIdx][0];
+    document.getElementById('droneState').innerHTML = 'Sa = <b>'+o+'</b> &middot; drone <b>'+(droneOn?'on':'off')+'</b>';
+    document.getElementById('droneBtn').textContent = droneOn ? 'Stop tanpura' : 'Start tanpura';
+    saSel.disabled = bankActive(); document.getElementById('octSel').disabled = bankActive();
+  }
+
+  function reedSynth(semi, t, dur, vol){
+    const o = ctx.createOscillator(); o.setPeriodicWave(reedWave); o.frequency.value = hz(semi);
+    const o2 = ctx.createOscillator(); o2.setPeriodicWave(reedWave); o2.frequency.value = hz(semi)*1.003;
+    const f = ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value = Math.min(hz(semi)*9, 6000);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.12);
+    g.gain.setValueAtTime(vol, t+dur-0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(f); o2.connect(f); f.connect(g); g.connect(master);
+    o.start(t); o2.start(t); o.stop(t+dur+0.05); o2.stop(t+dur+0.05);
+  }
+  function playBuffer(buf, t, dur, vol){
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const g = ctx.createGain();
+    const d = Math.min(dur, buf.duration);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.03);
+    g.gain.setValueAtTime(vol, t+d-0.2);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+d);
+    src.connect(g); g.connect(master);
+    src.start(t); src.stop(t+d+0.02);
+  }
+  function reed(semi, t, dur, vol){
+    if(bankActive() && S.bank.buffers[semi]) playBuffer(S.bank.buffers[semi], t, dur, 0.9);
+    else reedSynth(semi, t, dur, vol);
+  }
+  function playTarget(){
+    ensureCtx();
+    const t = ctx.currentTime + 0.05;
+    if(document.getElementById('saFirst').checked){
+      reed(0, t, 1.0, 0.22);
+      reed(S.target, t+1.3, 1.8, 0.25);
+    } else {
+      reed(S.target, t, 1.8, 0.25);
+    }
+  }
+  function playOne(semi){ ensureCtx(); reed(semi, ctx.currentTime+0.02, 1.2, 0.25); }
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const saSel = $('saSel');
+  SA_OPTS.forEach((o,i)=>{ const op=document.createElement('option'); op.value=i; op.textContent=o[0]; saSel.appendChild(op); });
+  saSel.value = S.saIdx;
+  $('octSel').value = String(S.oct);
+  saSel.addEventListener('change', ()=>{ S.saIdx = +saSel.value; save(); renderDrone(); });
+  $('octSel').addEventListener('change', e=>{ S.oct = +e.target.value; save(); });
+  $('droneBtn').addEventListener('click', ()=> droneOn ? stopDrone() : startDrone());
+
+  const pool = $('pool');
+  function renderPool(){
+    pool.innerHTML = '';
+    SWARS.forEach(s=>{
+      const b = document.createElement('button');
+      b.textContent = s.n + (s.v==='shuddh' ? '' : ' '+s.v);
+      b.setAttribute('aria-pressed', S.pool.has(s.i));
+      b.addEventListener('click', ()=>{
+        if(S.pool.has(s.i)){ if(S.pool.size>2) S.pool.delete(s.i); } else S.pool.add(s.i);
+        save(); renderPool(); renderGrid();
+      });
+      pool.appendChild(b);
+    });
+  }
+  $('pShuddh').addEventListener('click', ()=>{ S.pool = new Set(SHUDDH); save(); renderPool(); renderGrid(); });
+  $('pAll').addEventListener('click', ()=>{ S.pool = new Set(SWARS.map(s=>s.i)); save(); renderPool(); renderGrid(); });
+
+  const grid = $('grid');
+  function renderGrid(){
+    grid.innerHTML = '';
+    SWARS.forEach(s=>{
+      const b = document.createElement('button');
+      b.innerHTML = '<span class="n">'+s.n+'</span><span class="v">'+s.v+'</span>';
+      b.dataset.i = s.i;
+      if(!S.pool.has(s.i)) b.classList.add('hidden-swar');
+      b.disabled = (S.target===null);
+      b.addEventListener('click', ()=> onAnswer(s.i, b));
+      grid.appendChild(b);
+    });
+  }
+
+  function newRound(){
+    const arr = [...S.pool];
+    let pick;
+    do { pick = arr[Math.floor(Math.random()*arr.length)]; } while(arr.length>1 && pick===S.target);
+    S.target = pick; S.answered = false;
+    $('prompt').textContent = 'Which swar was that?';
+    $('reveal').textContent = ''; $('reveal').className = 'reveal';
+    $('keyLine').textContent = '';
+    $('playBtn').hidden = true; $('replayBtn').hidden = false; $('nextBtn').hidden = true;
+    renderGrid();
+    playTarget();
+  }
+  function onAnswer(i, btn){
+    if(S.target===null) return;
+    if(S.answered){ playOne(i); return; }
+    S.answered = true;
+    const t = SWARS[S.target], ok = (i===S.target);
+    S.total++; if(ok){ S.correct++; S.streak++; } else S.streak = 0;
+    const st = S.stats[S.target] || {r:0,a:0}; st.a++; if(ok) st.r++; S.stats[S.target] = st; save();
+    const label = t.n + (t.v==='shuddh' ? '' : ' ('+t.v+')');
+    $('reveal').textContent = label;
+    $('reveal').className = 'reveal ' + (ok?'good':'bad');
+    $('prompt').textContent = ok ? 'Yes.' : 'No, it was';
+    const saIdx = bankActive() ? ((Math.round(12*Math.log2(S.bank.saHz/440))+69)%12+12)%12 : S.saIdx;
+    const keyIdx = (saIdx + S.target) % 12;
+    $('keyLine').textContent = 'on your harmonium: ' + KEYS[keyIdx] + '  (' + t.key + ')';
+    [...grid.children].forEach(b=>{
+      const bi = +b.dataset.i;
+      if(bi===S.target) b.classList.add('hit');
+      else if(bi===i) b.classList.add('miss');
+    });
+    $('nextBtn').hidden = false;
+    renderScore();
+  }
+  $('playBtn').addEventListener('click', newRound);
+  $('nextBtn').addEventListener('click', newRound);
+  $('replayBtn').addEventListener('click', playTarget);
+
+  function renderScore(){
+    $('sCorrect').textContent = S.correct; $('sTotal').textContent = S.total; $('sStreak').textContent = S.streak;
+    const tb = $('statTable').querySelector('tbody'); tb.innerHTML = '';
+    SWARS.forEach(s=>{
+      const st = S.stats[s.i]; if(!st || !st.a) return;
+      const pct = Math.round(100*st.r/st.a);
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+s.n+(s.v==='shuddh'?'':' <span class="small">'+s.v+'</span>')+'</td>'+
+        '<td><div class="bar"><i style="width:'+pct+'%"></i></div></td>'+
+        '<td class="num">'+st.r+'</td><td class="num">'+st.a+'</td>';
+      tb.appendChild(tr);
+    });
+    if(!tb.children.length){ tb.innerHTML = '<tr><td colspan="4" class="small">Nothing yet. Answer a few rounds.</td></tr>'; }
+  }
+  $('resetBtn').addEventListener('click', ()=>{ S.stats = {}; S.correct=0; S.total=0; S.streak=0; save(); renderScore(); });
+
+  // ---------- recording analysis ----------
+  function toMono(ab){
+    const n = ab.length, out = new Float32Array(n);
+    for(let c=0;c<ab.numberOfChannels;c++){ const d = ab.getChannelData(c); for(let i=0;i<n;i++) out[i]+=d[i]/ab.numberOfChannels; }
+    return out;
+  }
+  function segment(mono, sr){
+    const frame = Math.round(sr*0.02), nF = Math.floor(mono.length/frame);
+    const rms = new Float32Array(nF); let max = 0;
+    for(let f=0;f<nF;f++){ let s=0; const o=f*frame; for(let i=0;i<frame;i++){ const v=mono[o+i]; s+=v*v; } rms[f]=Math.sqrt(s/frame); if(rms[f]>max) max=rms[f]; }
+    const thrOn = Math.max(max*0.14, 0.004), thrOff = thrOn*0.6;
+    const segs = []; let inSeg=false, start=0, below=0, above=0;
+    for(let f=0;f<nF;f++){
+      if(!inSeg){ if(rms[f]>thrOn){ above++; if(above>=3){ inSeg=true; start=f-2; below=0; } } else above=0; }
+      else { if(rms[f]<thrOff){ below++; if(below>=8){ segs.push([start, f-8]); inSeg=false; above=0; } } else below=0; }
+    }
+    if(inSeg) segs.push([start, nF-1]);
+    const merged = [];
+    for(const s of segs){
+      const last = merged[merged.length-1];
+      if(last && (s[0]-last[1])*frame/sr < 0.25) last[1] = s[1]; else merged.push(s.slice());
+    }
+    return merged.filter(s => (s[1]-s[0])*frame/sr >= 0.35).map(s => ({start:s[0]*frame, end:(s[1]+1)*frame}));
+  }
+  function pitchWindow(buf, sr){
+    const N = buf.length, minLag = Math.floor(sr/1500), maxLag = Math.min(Math.floor(sr/70), N-2);
+    const nsdf = new Float32Array(maxLag+1);
+    for(let tau=minLag;tau<=maxLag;tau++){
+      let acf=0, m=0;
+      for(let i=0;i<N-tau;i++){ const a=buf[i], b=buf[i+tau]; acf+=a*b; m+=a*a+b*b; }
+      nsdf[tau] = m ? 2*acf/m : 0;
+    }
+    const peaks=[]; let i=minLag;
+    while(i<=maxLag && nsdf[i]>0) i++;
+    for(;i<maxLag;i++){ if(nsdf[i]>nsdf[i-1] && nsdf[i]>=nsdf[i+1] && nsdf[i]>0.3) peaks.push(i); }
+    if(!peaks.length) return 0;
+    let best=0; for(const p of peaks) if(nsdf[p]>best) best=nsdf[p];
+    let tau = peaks.find(p => nsdf[p] >= 0.9*best);
+    const a=nsdf[tau-1], b=nsdf[tau], c=nsdf[tau+1], den=(a-2*b+c);
+    const shift = den ? 0.5*(a-c)/den : 0;
+    return sr/(tau+shift);
+  }
+  function pitchOf(mono, sr, seg){
+    const len = seg.end-seg.start, N = Math.min(4096, len);
+    const spots = [0.3,0.5,0.7].map(p => seg.start + Math.floor(p*(len-N)));
+    const vals = spots.map(s => pitchWindow(mono.subarray(s, s+N), sr)).filter(v=>v>0).sort((a,b)=>a-b);
+    return vals.length ? vals[Math.floor(vals.length/2)] : 0;
+  }
+  function noteName(f){
+    const n = Math.round(12*Math.log2(f/440))+69;
+    return NOTE[((n%12)+12)%12] + (Math.floor(n/12)-1) + ' (' + KEYS[((n%12)+12)%12] + ')';
+  }
+
+  async function resample(mono, sr){
+    const off = new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(1, Math.ceil(mono.length*BANK_SR/sr), BANK_SR);
+    const b = off.createBuffer(1, mono.length, sr); b.copyToChannel(mono, 0);
+    const src = off.createBufferSource(); src.buffer = b; src.connect(off.destination); src.start();
+    const out = await off.startRendering();
+    return out.getChannelData(0);
+  }
+  function wavBase64(samples, sr){
+    const n = samples.length, buf = new ArrayBuffer(44+n*2), v = new DataView(buf);
+    const str = (o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+    str(0,'RIFF'); v.setUint32(4, 36+n*2, true); str(8,'WAVE'); str(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+    v.setUint16(22,1,true); v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+    str(36,'data'); v.setUint32(40,n*2,true);
+    for(let i=0;i<n;i++){ const s=Math.max(-1,Math.min(1,samples[i])); v.setInt16(44+i*2, s<0?s*0x8000:s*0x7FFF, true); }
+    const bytes = new Uint8Array(buf); let bin='';
+    for(let i=0;i<bytes.length;i+=0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
+    return btoa(bin);
+  }
+  function base64ToBuf(b64){ const bin=atob(b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u.buffer; }
+
+  const anStatus = $('anStatus'), anTable = $('anTable');
+  function setAn(msg, cls){ anStatus.textContent = msg; anStatus.className = 'status' + (cls?' '+cls:''); }
+
+  function isVideoish(file){
+    const n = (file.name||'').toLowerCase();
+    return (file.type||'').startsWith('video/') || /\.(mov|mp4|m4v|3gp|webm)$/.test(n);
+  }
+  function decodeViaElement(file){
+    return new Promise((resolve, reject)=>{
+      const url = URL.createObjectURL(file);
+      const el = document.createElement('video');
+      el.playsInline = true; el.setAttribute('playsinline',''); el.preload = 'auto'; el.src = url;
+      el.style.position='absolute'; el.style.width='1px'; el.style.height='1px'; el.style.opacity='0'; el.style.pointerEvents='none';
+      document.body.appendChild(el);
+      const chunks = [];
+      let src, proc, sink, done = false;
+      const finish = (err)=>{
+        if(done) return; done = true;
+        try{ proc && proc.disconnect(); src && src.disconnect(); sink && sink.disconnect(); }catch(e){}
+        try{ el.pause(); }catch(e){}
+        URL.revokeObjectURL(url); el.remove();
+        if(err) return reject(err);
+        const n = chunks.reduce((a,c)=>a+c.length,0); const out = new Float32Array(n); let o=0;
+        for(const c of chunks){ out.set(c,o); o+=c.length; }
+        if(!n) return reject(new Error('no audio came through from the video'));
+        resolve({sampleRate: ctx.sampleRate, mono: out});
+      };
+      el.onerror = ()=> finish(new Error('the browser cannot play this video'));
+      el.onended = ()=> finish();
+      try{
+        src = ctx.createMediaElementSource(el);
+        proc = ctx.createScriptProcessor(4096, 1, 1);
+        proc.onaudioprocess = ev => { if(!el.paused) chunks.push(new Float32Array(ev.inputBuffer.getChannelData(0))); };
+        sink = ctx.createGain(); sink.gain.value = 0;
+        src.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+      }catch(e){ return finish(e); }
+      const p = el.play();
+      if(p && p.catch) p.catch(e => finish(new Error('playback was blocked, tap Analyse again')));
+      el.onloadedmetadata = ()=>{ setAn('Reading '+Math.round(el.duration)+' s of video in real time, keep the page open...'); };
+    });
+  }
+  async function decodeAny(file){
+    if(!isVideoish(file)){
+      try{ const ab = await ctx.decodeAudioData(await file.arrayBuffer()); return {sampleRate: ab.sampleRate, mono: toMono(ab)}; }
+      catch(e){ return decodeViaElement(file); }
+    }
+    return decodeViaElement(file);
+  }
+  let pendingFile = null;
+  $('recFile').addEventListener('change', e=>{
+    pendingFile = e.target.files && e.target.files[0] || null;
+    $('anRow').hidden = !pendingFile;
+    $('anFileName').textContent = pendingFile ? pendingFile.name : '';
+    anTable.hidden = true; $('bankActions').hidden = true; S.analysis = null; setAn('');
+  });
+  $('anBtn').addEventListener('click', async ()=>{
+    const file = pendingFile; if(!file) return;
+    anTable.hidden = true; $('bankActions').hidden = true; S.analysis = null;
+    setAn('Decoding '+file.name+'...');
+    $('anBtn').disabled = true;
+    try{
+      ensureCtx();
+      const dec = await decodeAny(file);
+      const sr = dec.sampleRate, mono = dec.mono;
+      const segs = segment(mono, sr);
+      if(segs.length < 2){ setAn('Found only '+segs.length+' note in the file. Leave a clear 1 second gap between keys and try again.', 'bad'); return; }
+      const sa = pitchOf(mono, sr, segs[0]);
+      if(!sa){ setAn('Could not find a pitch in the first note. Try recording closer to the grille.', 'bad'); return; }
+      const rows = segs.map((sg, k)=>{
+        const f = pitchOf(mono, sr, sg);
+        const cents = f ? 1200*Math.log2(f/(sa*Math.pow(2,k/12))) : NaN;
+        return {k, seg:sg, hz:f, cents};
+      });
+      const tb = anTable.querySelector('tbody'); tb.innerHTML='';
+      rows.forEach(r=>{
+        const exp = r.k<12 ? SWARS[r.k].n + (SWARS[r.k].v==='shuddh'?'':' '+SWARS[r.k].v) : (r.k===12 ? 'Sa (upper)' : 'extra');
+        const ok = isFinite(r.cents) && Math.abs(r.cents) <= 35;
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td class="num">'+(r.k+1)+'</td><td>'+exp+'</td><td class="num">'+(r.hz?r.hz.toFixed(1):'?')+'</td>'+
+          '<td class="num '+(ok?'ok':'off')+'">'+(isFinite(r.cents)?(r.cents>0?'+':'')+r.cents.toFixed(0):'?')+'</td><td></td>';
+        const b = document.createElement('button'); b.textContent='Play';
+        b.addEventListener('click', ()=>{ ensureCtx(); const sub = ctx.createBuffer(1, r.seg.end-r.seg.start, sr); sub.copyToChannel(mono.subarray(r.seg.start, r.seg.end), 0); playBuffer(sub, ctx.currentTime+0.02, 1.5, 0.9); });
+        tr.lastElementChild.appendChild(b);
+        tb.appendChild(tr);
+      });
+      anTable.hidden = false;
+      const bad = rows.filter(r => r.k<12 && !(isFinite(r.cents) && Math.abs(r.cents)<=35)).length;
+      let msg = 'Sa = '+sa.toFixed(1)+' Hz, that is '+noteName(sa)+'. '+segs.length+' notes found.';
+      if(segs.length < 12) msg += ' Need 12. A key may have been too quiet or two ran together.';
+      else if(segs.length > 13) msg += ' More than 13: a note probably split in two. Re-record with steadier bellows.';
+      if(bad) msg += ' '+bad+' key(s) are more than 35 cents off the expected swar, check them.';
+      S.analysis = {mono, sr, segs: segs.slice(0,12), sa, ok: segs.length>=12 && segs.length<=13};
+      setAn(msg, S.analysis.ok && !bad ? 'good' : (S.analysis.ok ? '' : 'bad'));
+      $('bankActions').hidden = !S.analysis.ok;
+    }catch(err){ setAn('Could not read that file ('+(err && err.message || err)+'). Record with Voice Memos and share the .m4a, or try .mp3 or .wav.', 'bad'); }
+    $('anBtn').disabled = false;
+  });
+
+  // ---------- bank storage ----------
+  let assetsApi = null, dbDoc = null;
+  async function capabilities(){
+    if(!window.claude || !window.claude.use) return;
+    try{
+      const [a, db] = await Promise.all([window.claude.use('assets'), window.claude.use('db')]);
+      assetsApi = a;
+      if(db){ dbDoc = db.doc('samples/bank'); const s = await dbDoc.get(); if(s.exists && s.data().asset){ S.bankId = s.data().asset; save(); } }
+    }catch(e){}
+    if(S.bankId) loadBank(S.bankId);
+  }
+  async function loadBank(id){
+    try{
+      setBankStatus('Loading your recording...');
+      const res = await fetch('/_blob/'+id); if(!res.ok) throw new Error('missing');
+      const j = await res.json();
+      ensureCtx();
+      const buffers = {};
+      for(const n of j.notes){ buffers[n.semi] = await ctx.decodeAudioData(base64ToBuf(n.wav)); }
+      S.bank = {saHz: j.saHz, buffers};
+      renderBank(); renderDrone();
+    }catch(e){ S.bank=null; S.bankId=null; save(); setBankStatus('Saved recording could not be loaded. Record again below.', 'bad'); }
+  }
+  function setBankStatus(msg, cls){ const el=$('bankStatus'); el.textContent=msg; el.className='status'+(cls?' '+cls:''); }
+  function renderBank(){
+    const has = !!S.bank;
+    $('useBankLabel').hidden = !has; $('bankRemoveRow').hidden = !has;
+    $('useBank').checked = S.useBank;
+    if(has) setBankStatus('Sound: '+(S.useBank?'your harmonium':'synth reed')+'. Recording saved, Sa '+S.bank.saHz.toFixed(1)+' Hz ('+noteName(S.bank.saHz)+').', S.useBank?'good':'');
+    else setBankStatus('Sound: synth reed. No recording saved yet.');
+    $('recDetails').open = !has;
+  }
+  $('useBank').addEventListener('change', e=>{ S.useBank = e.target.checked; save(); renderBank(); renderDrone(); });
+  $('saveBank').addEventListener('click', async ()=>{
+    const A = S.analysis; if(!A || !A.ok) return;
+    if(!assetsApi){ setAn('Saving needs the page to be opened by its owner, signed in. Open it from your Claude artifacts and try again.', 'bad'); return; }
+    $('saveBank').disabled = true; setAn('Preparing samples...');
+    try{
+      const notes = [];
+      for(let k=0;k<12;k++){
+        const sg = A.segs[k];
+        const from = sg.start + Math.round(A.sr*0.08);
+        const to = Math.min(sg.end, from + Math.round(A.sr*NOTE_LEN));
+        const piece = await resample(A.mono.subarray(from, to), A.sr);
+        notes.push({semi:k, wav: wavBase64(piece, BANK_SR)});
+      }
+      const json = JSON.stringify({v:1, saHz:A.sa, sr:BANK_SR, notes});
+      setAn('Uploading...');
+      const up = await assetsApi.upload(new Blob([json], {type:'application/json'}), {type:'application/json'});
+      const oldId = S.bankId;
+      S.bankId = up.id; save();
+      if(dbDoc){ try{ await dbDoc.set({asset: up.id, saHz: A.sa, savedAt: new Date().toISOString()}); }catch(e){} }
+      if(oldId && oldId!==up.id){ try{ await assetsApi.delete(oldId); }catch(e){} }
+      setAn('Saved. The test now plays your harmonium.', 'good');
+      $('bankActions').hidden = true; S.useBank = true; save();
+      await loadBank(up.id);
+    }catch(err){ setAn('Could not save ('+(err && (err.code||err.message) || err)+').', 'bad'); }
+    $('saveBank').disabled = false;
+  });
+  $('removeBank').addEventListener('click', async ()=>{
+    const id = S.bankId;
+    S.bank=null; S.bankId=null; save(); renderBank(); renderDrone();
+    if(dbDoc){ try{ await dbDoc.delete(); }catch(e){} }
+    if(assetsApi && id){ try{ await assetsApi.delete(id); }catch(e){} }
+  });
+
+  renderDrone(); renderPool(); renderGrid(); renderScore(); renderBank();
+  capabilities();
+})();
+</script>
+
+</body>
+</html>

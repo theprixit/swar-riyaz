@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tabla Sur</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Karla:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#efeee8; --paper:#faf9f5; --ink:#1f2321; --muted:#6b6f69; --line:#d7d6cd;
+  --accent:#8c2f22; --accent-ink:#fff; --brass:#9a7324; --good:#2f6f4e; --bad:#a63a2b; --chip:#f4f3ee;
+  --font-display:"Spectral",Georgia,serif; --font-body:"Karla","Helvetica Neue",Arial,sans-serif; --font-mono:"DM Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#16181a; --paper:#1f2224; --ink:#ece9e0; --muted:#9a9d95; --line:#33373a;
+    --accent:#c24d3b; --brass:#c8a04a; --good:#5db686; --bad:#e06a56; --chip:#272a2d; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px}
+.wrap{max-width:520px;margin:0 auto;display:grid;gap:14px}
+h1{font-family:var(--font-display);font-weight:600;font-size:1.9rem;line-height:1.1;margin:0}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.95rem}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row>*{min-width:0}
+label.sel{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+select,input[type=number]{font:inherit;font-size:1rem;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--ink)}
+input[type=number]{width:7.5em;font-family:var(--font-mono)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:8px;padding:10px 14px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700;font-size:1.05rem;padding:14px 18px}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;flex:1;padding:9px 6px;font-size:.9rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.meter{display:grid;gap:6px;justify-items:center;padding-block:10px}
+.hz{font-family:var(--font-mono);font-size:2.4rem;font-variant-numeric:tabular-nums;line-height:1}
+.hz small{font-size:1rem;color:var(--muted)}
+.verdict{font-family:var(--font-display);font-size:1.4rem;font-weight:600;min-height:1.4em;text-align:center}
+.verdict.good{color:var(--good)} .verdict.flat,.verdict.sharp{color:var(--bad)}
+.hint{font-size:.9rem;color:var(--muted);text-align:center;min-height:1.3em}
+svg{width:100%;max-width:420px;height:auto;display:block}
+.target{font-family:var(--font-mono);font-size:.85rem;color:var(--muted)}
+.target b{color:var(--brass);font-weight:500}
+.status{font-family:var(--font-mono);font-size:.85rem;min-height:1.3em}
+.status.bad{color:var(--bad)} .status.good{color:var(--good)}
+details summary{cursor:pointer;font-weight:700}
+ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
+.small{font-size:.8rem;color:var(--muted)}
+.hist{display:flex;gap:3px;height:28px;align-items:flex-end}
+.hist i{flex:1;background:var(--line);border-radius:2px 2px 0 0;min-height:2px}
+.hist i.g{background:var(--good)} .hist i.b{background:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Tabla Sur</h1>
+    <p class="sub">Strike near the rim, read the needle, adjust, strike again.</p>
+  </header>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <label class="sel">Sa
+        <select id="saSel"></select>
+      </label>
+      <label class="sel">Fine Sa (Hz)
+        <input type="number" id="saHz" step="0.1" min="60" max="600">
+      </label>
+      <button id="capBtn" title="Play Sa on the harmonium for 2 seconds">Set Sa from harmonium</button>
+    </div>
+    <div style="margin-top:12px">
+      <div class="small" style="margin-bottom:6px">Tuning</div>
+      <div class="seg" id="modeSeg">
+        <button data-r="1" aria-pressed="true">Dayan: Sa</button>
+        <button data-r="1.5">Dayan: Pa</button>
+        <button data-r="1.3333">Dayan: Ma</button>
+        <button data-r="0.5">Baya: Sa (low)</button>
+        <button data-r="0.75">Baya: Pa (low)</button>
+      </div>
+    </div>
+    <div class="target" style="margin-top:10px" id="targetLine"></div>
+  </section>
+
+  <section class="card meter">
+    <svg viewBox="0 0 420 150" role="img" aria-label="Tuning needle">
+      <path d="M30 130 A180 180 0 0 1 390 130" fill="none" stroke="var(--line)" stroke-width="10"/>
+      <path id="goodArc" d="" fill="none" stroke="var(--good)" stroke-width="10" opacity=".55"/>
+      <g id="ticks" stroke="var(--muted)" stroke-width="1.5"></g>
+      <text x="30" y="148" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">-50</text>
+      <text x="210" y="24" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">0</text>
+      <text x="390" y="148" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="DM Mono,monospace">+50</text>
+      <line id="needle" x1="210" y1="130" x2="210" y2="40" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" opacity=".25"/>
+      <circle cx="210" cy="130" r="6" fill="var(--ink)"/>
+    </svg>
+    <div class="hz"><span id="hzVal">--</span><small> Hz</small></div>
+    <div class="verdict" id="verdict">Start the mic, then strike the dayan.</div>
+    <div class="hint" id="hint"></div>
+    <div class="hist" id="hist" style="width:100%;max-width:420px"></div>
+    <div class="row" style="justify-content:center;margin-top:6px">
+      <button class="primary" id="micBtn">Start mic</button>
+      <button id="refBtn">Play reference</button>
+    </div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section class="card">
+    <details open>
+      <summary>How to tune</summary>
+      <ul>
+        <li>Strike the dayan with a clean <em>Na</em> or <em>Tin</em> on the kinar, not on the syahi. Let it ring. The reading settles about half a second after the stroke.</li>
+        <li>Go around the drum: strike beside each gatta in turn. Every position should read the same. A spot that reads flat needs that gatta pushed down; sharp, that gatta up.</li>
+        <li>Coarse tuning: tap the gatta down with the hammer to raise, up from below to lower. Fine tuning: tap the gajra (the braid) just above the gatta, down to raise, up to lower.</li>
+        <li>Get all positions within about 5 cents, then check the open <em>Tun</em> in the middle; it should match too.</li>
+        <li>Baya is tuned loosely, an octave below Sa or to lower Pa. Read it with a soft open <em>Ghe</em>, heel off the skin.</li>
+        <li>The needle shows the nearest octave of the target, so the dayan reading as 281 Hz against a 140.6 Hz Sa is in tune, one octave up, which is normal.</li>
+      </ul>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const KEYS=['Safed 1','Kali 1','Safed 2','Kali 2','Safed 3','Safed 4','Kali 3','Safed 5','Kali 4','Safed 6','Kali 5','Safed 7'];
+  const $=id=>document.getElementById(id);
+  const S={saHz:140.6, ratio:1};
+  try{ const s=JSON.parse(localStorage.getItem('tabla-sur')||'{}'); if(s.saHz) S.saHz=s.saHz; if(s.ratio) S.ratio=s.ratio; }catch(e){}
+  function save(){ try{ localStorage.setItem('tabla-sur', JSON.stringify(S)); }catch(e){} }
+
+  const saSel=$('saSel');
+  for(let o=2;o<=4;o++) for(let i=0;i<12;i++){ const op=document.createElement('option'); const hz=440*Math.pow(2,(o*12+i-57)/12); op.value=hz.toFixed(2); op.textContent=NOTE[i]+o+'  '+KEYS[i]+'  ('+hz.toFixed(1)+' Hz)'; saSel.appendChild(op); }
+  function syncSel(){ let best=null,bd=1e9; [...saSel.options].forEach(o=>{ const d=Math.abs(Math.log2(o.value/S.saHz)); if(d<bd){bd=d;best=o;} }); if(best) saSel.value=best.value; $('saHz').value=S.saHz.toFixed(1); }
+  saSel.addEventListener('change',()=>{ S.saHz=+saSel.value; save(); syncSel(); renderTarget(); });
+  $('saHz').addEventListener('change',()=>{ const v=+$('saHz').value; if(v>=60&&v<=600){ S.saHz=v; save(); syncSel(); renderTarget(); } });
+  $('modeSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.ratio=+b.dataset.r; save(); [...$('modeSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); renderTarget(); });
+  [...$('modeSeg').children].forEach(x=>x.setAttribute('aria-pressed',+x.dataset.r===S.ratio));
+  function target(){ return S.saHz*S.ratio; }
+  function noteOf(f){ const n=Math.round(12*Math.log2(f/440))+69; return NOTE[((n%12)+12)%12]+(Math.floor(n/12)-1); }
+  function renderTarget(){ const t=target(); $('targetLine').innerHTML='target <b>'+t.toFixed(1)+' Hz</b> ('+noteOf(t)+'), any octave'; }
+
+  // gauge
+  const ticks=$('ticks'); for(let c=-50;c<=50;c+=10){ const a=(c/50)*Math.PI/2; const x1=210+Math.sin(a)*172,y1=130-Math.cos(a)*172,x2=210+Math.sin(a)*(c%50?166:160),y2=130-Math.cos(a)*(c%50?166:160); const l=document.createElementNS('http://www.w3.org/2000/svg','line'); l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2); ticks.appendChild(l); }
+  (function(){ const a1=(-5/50)*Math.PI/2,a2=(5/50)*Math.PI/2; $('goodArc').setAttribute('d','M'+(210+Math.sin(a1)*180)+' '+(130-Math.cos(a1)*180)+' A180 180 0 0 1 '+(210+Math.sin(a2)*180)+' '+(130-Math.cos(a2)*180)); })();
+  function setNeedle(cents, live){ const c=Math.max(-50,Math.min(50,cents)); const a=(c/50)*Math.PI/2; const n=$('needle'); n.setAttribute('x2',210+Math.sin(a)*90); n.setAttribute('y2',130-Math.cos(a)*90); n.setAttribute('opacity',live?'1':'.25'); }
+
+  // audio
+  let ctx=null, stream=null, analyser=null, raf=0, buf=null, lastGood=0, hist=[];
+  function ensureCtx(){ if(!ctx){ ctx=new (window.AudioContext||window.webkitAudioContext)(); } if(ctx.state==='suspended') ctx.resume(); return ctx; }
+  function nsdfPitch(x, sr){
+    const N=x.length, minLag=Math.floor(sr/1200), maxLag=Math.min(Math.floor(sr/50), N-2);
+    let e=0; for(let i=0;i<N;i++) e+=x[i]*x[i]; if(Math.sqrt(e/N)<0.01) return 0;
+    const nsdf=new Float32Array(maxLag+1);
+    for(let t=minLag;t<=maxLag;t++){ let acf=0,m=0; for(let i=0;i<N-t;i++){ const a=x[i],b=x[i+t]; acf+=a*b; m+=a*a+b*b; } nsdf[t]=m?2*acf/m:0; }
+    const peaks=[]; let i=minLag; while(i<=maxLag&&nsdf[i]>0) i++;
+    for(;i<maxLag;i++) if(nsdf[i]>nsdf[i-1]&&nsdf[i]>=nsdf[i+1]&&nsdf[i]>0.5) peaks.push(i);
+    if(!peaks.length) return 0;
+    let best=0; for(const p of peaks) if(nsdf[p]>best) best=nsdf[p];
+    if(best<0.8) return 0;
+    const tau=peaks.find(p=>nsdf[p]>=0.92*best);
+    const a=nsdf[tau-1],b=nsdf[tau],c=nsdf[tau+1],den=a-2*b+c; const sh=den?0.5*(a-c)/den:0;
+    return sr/(tau+sh);
+  }
+  function centsToTarget(f){ const t=target(); let r=f/t; while(r>Math.SQRT2) r/=2; while(r<Math.SQRT1_2) r*=2; return 1200*Math.log2(r); }
+  let recent=[];
+  function loop(){
+    raf=requestAnimationFrame(loop);
+    analyser.getFloatTimeDomainData(buf);
+    const f=nsdfPitch(buf, ctx.sampleRate);
+    const now=performance.now();
+    if(f>0){
+      recent.push(f); if(recent.length>5) recent.shift();
+      if(recent.length>=3){
+        const sorted=recent.slice().sort((a,b)=>a-b); const med=sorted[Math.floor(sorted.length/2)];
+        const spread=Math.abs(1200*Math.log2(sorted[sorted.length-1]/sorted[0]));
+        if(spread<30){ show(med, true); lastGood=now; }
+      }
+    } else {
+      recent=[];
+      if(now-lastGood>1500){ setNeedle(hist.length?hist[hist.length-1]:0,false); $('verdict').className='verdict'; if(hist.length) $('verdict').textContent='Strike again.'; }
+    }
+  }
+  function show(f, live){
+    const c=centsToTarget(f);
+    $('hzVal').textContent=f.toFixed(1);
+    setNeedle(c, live);
+    const v=$('verdict'), h=$('hint');
+    if(Math.abs(c)<=5){ v.textContent='In sur'; v.className='verdict good'; h.textContent=(c>=0?'+':'')+c.toFixed(1)+' cents'; }
+    else if(c<0){ v.textContent='Flat by '+Math.abs(c).toFixed(0)+' cents'; v.className='verdict flat'; h.textContent=S.ratio<1?'Tighten a little: tap the gatta down.':'Raise it: tap the gatta (or gajra above it) down.'; }
+    else { v.textContent='Sharp by '+c.toFixed(0)+' cents'; v.className='verdict sharp'; h.textContent=S.ratio<1?'Loosen a little: tap the gatta up from below.':'Lower it: tap the gatta up from below.'; }
+    if(live && (!hist.length || Math.abs(hist[hist.length-1]-c)>1 || performance.now()-lastGood>800)){ hist.push(c); if(hist.length>24) hist.shift(); renderHist(); }
+  }
+  function renderHist(){ const el=$('hist'); el.innerHTML=''; hist.forEach(c=>{ const i=document.createElement('i'); i.style.height=Math.max(2,Math.min(28,28-Math.min(28,Math.abs(c)*0.5)))+'px'; i.className=Math.abs(c)<=5?'g':'b'; el.appendChild(i); }); }
+
+  async function startMic(){
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ setStatus('This browser or page location does not allow the microphone. Open the page over https (for example GitHub Pages) or in Chrome on a computer.', 'bad'); return; }
+    try{
+      ensureCtx();
+      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+      const src=ctx.createMediaStreamSource(stream);
+      analyser=ctx.createAnalyser(); analyser.fftSize=4096; analyser.smoothingTimeConstant=0;
+      src.connect(analyser); buf=new Float32Array(analyser.fftSize);
+      $('micBtn').textContent='Stop mic'; setStatus('Listening. Strike the drum.', 'good');
+      loop();
+    }catch(e){ setStatus('Microphone refused: '+(e&&e.name||e)+'. Allow the mic for this page and try again.', 'bad'); }
+  }
+  function stopMic(){ cancelAnimationFrame(raf); if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } $('micBtn').textContent='Start mic'; setStatus('Mic off.'); }
+  $('micBtn').addEventListener('click',()=> stream?stopMic():startMic());
+  function setStatus(m,c){ const s=$('status'); s.textContent=m; s.className='status'+(c?' '+c:''); }
+
+  $('refBtn').addEventListener('click',()=>{
+    ensureCtx(); const t=ctx.currentTime, f=target();
+    const n=16, re=new Float32Array(n), im=new Float32Array(n); for(let k=1;k<n;k++) im[k]=(k%2?1:0.6)/Math.pow(k,1.15);
+    const w=ctx.createPeriodicWave(re,im); const o=ctx.createOscillator(); o.setPeriodicWave(w); o.frequency.value=f;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.25,t+0.1); g.gain.setValueAtTime(0.25,t+1.8); g.gain.exponentialRampToValueAtTime(0.0001,t+2.2);
+    o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+2.3);
+  });
+
+  $('capBtn').addEventListener('click', async ()=>{
+    if(!stream){ await startMic(); if(!stream) return; }
+    setStatus('Hold Sa on the harmonium for 2 seconds...');
+    const vals=[]; const t0=performance.now();
+    await new Promise(res=>{ (function tick(){ analyser.getFloatTimeDomainData(buf); const f=nsdfPitch(buf,ctx.sampleRate); if(f>0) vals.push(f); if(performance.now()-t0<2200) requestAnimationFrame(tick); else res(); })(); });
+    if(vals.length<5){ setStatus('Could not hear a steady note. Bring the phone closer to the grille.', 'bad'); return; }
+    vals.sort((a,b)=>a-b); let med=vals[Math.floor(vals.length/2)];
+    while(med>320) med/=2; while(med<80) med*=2;
+    S.saHz=+med.toFixed(1); save(); syncSel(); renderTarget(); setStatus('Sa set to '+S.saHz+' Hz ('+noteOf(S.saHz)+').', 'good');
+  });
+
+  syncSel(); renderTarget(); setNeedle(0,false);
+})();
+</script>
+</body>
+</html>
