@@ -79,6 +79,41 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   </section>
 
   <section class="card">
+    <details id="ownDetails">
+      <summary>Your own lehra</summary>
+      <p class="small" style="margin:8px 0">Type one token per matra, separated by spaces. Lowercase = komal, M = tivra Ma, a comma after a note = lower octave (D,), an apostrophe = upper (S'). A dash holds the previous note. Two notes in one matra: join them with a slash (S/R).</p>
+      <div class="row">
+        <label class="sel">Name / raga<input type="text" id="ownName" placeholder="Bageshri (Tablavault)" style="font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--ink);width:12em"></label>
+        <label class="sel">Taal<select id="ownTaal"></select></label>
+      </div>
+      <textarea id="ownNotes" rows="3" placeholder="S n, D, n, S m g m D n S' n D m g R" style="width:100%;margin-top:8px;font-family:var(--font-mono);font-size:.95rem;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--chip);color:var(--ink)"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="ownSave">Save and use</button>
+        <button id="ownTest">Preview one cycle</button>
+        <button id="ownDelete" hidden>Delete this lehra</button>
+        <span class="small" id="ownStatus"></span>
+      </div>
+
+      <h3 style="font-family:var(--font-display);font-size:1.05rem;margin:16px 0 4px">From a recording</h3>
+      <p class="small" style="margin:0 0 8px">Screen-record the video on your phone (Control Centre, Record, microphone off), then pick that file here. Set the Sa the recording is in, press Listen, and tap Sam each time sam comes round, at least three times. The page lines the melody up with your taps and writes the sargam above for you to correct.</p>
+      <div class="row">
+        <input type="file" id="recFile" accept="audio/*,video/*,.m4a,.mp3,.wav,.mp4,.mov">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="sel">Recording's Sa<select id="recSa"></select></label>
+        <label class="sel">Notes per matra<select id="recSub"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option></select></label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="recListen" disabled>Listen</button>
+        <button class="primary" id="recSam" disabled style="font-size:1rem;padding:10px 16px">Sam</button>
+        <button id="recBuild" disabled>Write sargam</button>
+        <span class="small" id="recStatus"></span>
+      </div>
+      <div class="small" id="recTaps" style="margin-top:6px"></div>
+    </details>
+  </section>
+
+  <section class="card">
     <div class="taal" id="taal"></div>
     <div class="big" style="margin-top:12px">
       <div><div class="v" id="matraV">1</div><div class="l">matra</div></div>
@@ -158,13 +193,15 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   const S={lehra:'tt-bhup', saHz:140.6, bpm:80, clicks:'sam', drone:true, high:false};
   try{ Object.assign(S, JSON.parse(localStorage.getItem('lehra-saath')||'{}')); }catch(e){}
   function save(){ try{ localStorage.setItem('lehra-saath', JSON.stringify(S)); }catch(e){} }
-  function cur(){ return LEHRAS.find(l=>l.id===S.lehra)||LEHRAS[0]; }
+  let CUSTOM=[]; try{ CUSTOM=JSON.parse(localStorage.getItem('lehra-custom')||'[]'); }catch(e){}
+  function allLehras(){ return LEHRAS.concat(CUSTOM); }
+  function cur(){ return allLehras().find(l=>l.id===S.lehra)||LEHRAS[0]; }
   function taal(){ return TAALS[cur().taal]; }
 
   // selects
   const lehraSel=$('lehraSel');
-  LEHRAS.forEach(l=>{ const o=document.createElement('option'); o.value=l.id; o.textContent=TAALS[l.taal].name+' ('+TAALS[l.taal].n+') · '+l.raga; lehraSel.appendChild(o); });
-  lehraSel.value=S.lehra;
+  function fillLehraSel(){ lehraSel.innerHTML=''; allLehras().forEach(l=>{ const o=document.createElement('option'); o.value=l.id; o.textContent=TAALS[l.taal].name+' ('+TAALS[l.taal].n+') · '+l.raga+(l.custom?' ★':''); lehraSel.appendChild(o); }); lehraSel.value=cur().id; }
+  fillLehraSel();
   const saSel=$('saSel');
   for(let o=2;o<=4;o++) for(let i=0;i<12;i++){ const op=document.createElement('option'); const hz=440*Math.pow(2,(o*12+i-57)/12); op.value=hz.toFixed(2); op.textContent=NOTE[i]+o+'  '+KEYS[i]; saSel.appendChild(op); }
   function syncSa(){ let best=null,bd=1e9; [...saSel.options].forEach(o=>{ const d=Math.abs(Math.log2(o.value/S.saHz)); if(d<bd){bd=d;best=o;} }); if(best) saSel.value=best.value; $('saHz').value=S.saHz.toFixed(1); }
@@ -191,7 +228,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     });
   }
   function renderNotes(){
-    const L=cur(), T=taal(), toks=L.notes.split(/\s+/); let out=[], i=0;
+    const L=cur(), T=taal(), toks=L.notes.trim().split(/\s+/); let out=[], i=0;
     T.vib.forEach(len=>{ out.push(toks.slice(i,i+len).join(' ')); i+=len; });
     $('notesLine').innerHTML='<b>'+L.raga+'</b> · '+out.join(' | ')+' |';
   }
@@ -276,12 +313,25 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function isTali(m){ const T=taal(); let s=1; for(let i=0;i<T.vib.length;i++){ if(m===s) return T.marks[i]!=='0'; s+=T.vib[i]; } return false; }
   function isVibStart(m){ const T=taal(); let s=1; for(let i=0;i<T.vib.length;i++){ if(m===s) return true; s+=T.vib[i]; } return false; }
 
+  // Turn a notes string into events: [{at (matras from sam), dur (matras), semi}], holds absorbed into the previous note.
+  function compile(notes, n){
+    const toks=notes.trim().split(/\s+/); const ev=[];
+    for(let m=0;m<n;m++){
+      const subs=(toks[m]||'-').split('/'); const w=1/subs.length;
+      subs.forEach((sub,k)=>{ const at=m+k*w; const semi=parse(sub); if(semi===null){ if(ev.length) ev[ev.length-1].dur+=w; } else ev.push({at,dur:w,semi}); });
+    }
+    // a hold at the very start of the cycle extends the last note of the previous cycle
+    let lead=0; while(toks[lead]==='-' && lead<n) lead++;
+    if(lead && ev.length) ev[ev.length-1].dur+=lead;
+    return ev;
+  }
+  let compiled=null, compiledKey='';
+  function events(){ const L=cur(), T=taal(); const key=L.id+'|'+L.notes+'|'+T.n; if(compiledKey!==key){ compiled=compile(L.notes,T.n); compiledKey=key; } return compiled; }
   function schedule(){
-    const L=cur(), T=taal(), toks=L.notes.split(/\s+/), beat=60/S.bpm;
+    const T=taal(), beat=60/S.bpm, ev=events();
     while(nextTime<ctx.currentTime+1.6){
       const m=(nextIdx%T.n)+1;
-      let semi=parse(toks[nextIdx%T.n]);
-      let hold=1; if(semi!==null){ for(let k=1;k<T.n;k++){ if(toks[(nextIdx+k)%T.n]==='-') hold++; else break; } reed(semi,nextTime,beat*hold,0.22); }
+      ev.forEach(e=>{ if(Math.floor(e.at+1e-6)===m-1){ reed(e.semi, nextTime+(e.at-(m-1))*beat, beat*e.dur, 0.22); } });
       const strong=m===1;
       if(S.clicks==='all' || (S.clicks==='sam'&&strong) || (S.clicks==='tali'&&isVibStart(m)&&(isTali(m)||strong))) click(nextTime,strong);
       sched.push({t:nextTime,m:m,a:Math.floor(nextIdx/T.n)+1});
@@ -320,7 +370,118 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   let taps=[];
   $('tapBtn').addEventListener('click',()=>{ const t=performance.now(); taps=taps.filter(x=>t-x<3000); taps.push(t); if(taps.length>=3){ const iv=(taps[taps.length-1]-taps[0])/(taps.length-1); const b=Math.round(60000/iv); if(b>=30&&b<=240){ S.bpm=b; $('bpm').value=b; $('bpmV').textContent=b; $('layaName').textContent=b<60?'vilambit':(b<120?'madhya':'drut'); save(); retime(); } } });
 
+  // ---- own lehra editor ----
+  const ownTaal=$('ownTaal'); Object.keys(TAALS).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=TAALS[k].name+' ('+TAALS[k].n+')'; ownTaal.appendChild(o); });
+  function saveCustom(){ try{ localStorage.setItem('lehra-custom', JSON.stringify(CUSTOM)); }catch(e){} }
+  function validate(notes, n){ const toks=notes.trim().split(/\s+/).filter(Boolean); if(toks.length!==n) return 'Need exactly '+n+' matras, got '+toks.length+'.'; for(const t of toks){ for(const sub of t.split('/')){ if(sub==='-') continue; if(parse(sub)===undefined||isNaN(parse(sub))) return 'Cannot read "'+sub+'".'; } } return ''; }
+  function loadOwn(l){ $('ownName').value=l.raga; ownTaal.value=l.taal; $('ownNotes').value=l.notes; $('ownDelete').hidden=!l.custom; $('ownDetails').open=true; }
+  lehraSel.addEventListener('change',()=>{ const l=cur(); if(l.custom) loadOwn(l); else $('ownDelete').hidden=true; });
+  $('ownSave').addEventListener('click',()=>{
+    const taalKey=ownTaal.value, n=TAALS[taalKey].n, notes=$('ownNotes').value.replace(/\|/g,' '), name=$('ownName').value.trim()||'My lehra';
+    const err=validate(notes,n); if(err){ $('ownStatus').textContent=err; return; }
+    let l=CUSTOM.find(x=>x.id===S.lehra);
+    if(l){ l.taal=taalKey; l.raga=name; l.notes=notes.trim().split(/\s+/).join(' '); }
+    else { l={id:'c'+Date.now().toString(36), taal:taalKey, raga:name, notes:notes.trim().split(/\s+/).join(' '), custom:true}; CUSTOM.push(l); }
+    saveCustom(); S.lehra=l.id; save(); fillLehraSel(); renderTaal(); renderNotes(); $('ownDelete').hidden=false; $('ownStatus').textContent='Saved.';
+    if(playing){ flushFuture(); nextIdx=0; nextTime=ctx.currentTime+0.03; schedule(); }
+  });
+  $('ownDelete').addEventListener('click',()=>{ const i=CUSTOM.findIndex(x=>x.id===S.lehra); if(i<0) return; CUSTOM.splice(i,1); saveCustom(); if(playing) stop(); S.lehra=LEHRAS[0].id; save(); fillLehraSel(); renderTaal(); renderNotes(); $('ownDelete').hidden=true; $('ownStatus').textContent='Deleted.'; });
+  $('ownTest').addEventListener('click',()=>{
+    const taalKey=ownTaal.value, n=TAALS[taalKey].n, notes=$('ownNotes').value.replace(/\|/g,' ');
+    const err=validate(notes,n); if(err){ $('ownStatus').textContent=err; return; }
+    ensureCtx(); const beat=60/S.bpm; let t=ctx.currentTime+0.05; compile(notes,n).forEach(e=>reed(e.semi,t+e.at*beat,e.dur*beat,0.22)); $('ownStatus').textContent='Playing one cycle at '+S.bpm+'.';
+  });
+
+  // ---- transcription from a recording ----
+  const recSa=$('recSa'); for(let o=2;o<=4;o++) for(let i=0;i<12;i++){ const op=document.createElement('option'); const hz=440*Math.pow(2,(o*12+i-57)/12); op.value=hz.toFixed(2); op.textContent=NOTE[i]+o+'  '+KEYS[i]; recSa.appendChild(op); }
+  recSa.value=(440*Math.pow(2,(3*12+8-57)/12)).toFixed(2);
+  let rec={mono:null, sr:0, frames:null, hop:0, src:null, t0:0, taps:[]};
+  function setRec(m){ $('recStatus').textContent=m; }
+  function toMono(ab){ const n=ab.length, out=new Float32Array(n); for(let c=0;c<ab.numberOfChannels;c++){ const d=ab.getChannelData(c); for(let i=0;i<n;i++) out[i]+=d[i]/ab.numberOfChannels; } return out; }
+  function decodeViaElement(file){
+    return new Promise((resolve,reject)=>{
+      const url=URL.createObjectURL(file); const el=document.createElement('video'); el.playsInline=true; el.preload='auto'; el.src=url; el.muted=false; el.style.cssText='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none'; document.body.appendChild(el);
+      const chunks=[]; let srcN,proc,sink,done=false;
+      const finish=err=>{ if(done) return; done=true; try{proc&&proc.disconnect(); srcN&&srcN.disconnect(); sink&&sink.disconnect();}catch(e){} try{el.pause();}catch(e){} URL.revokeObjectURL(url); el.remove(); if(err) return reject(err); const n=chunks.reduce((a,c)=>a+c.length,0); const out=new Float32Array(n); let o=0; for(const c of chunks){ out.set(c,o); o+=c.length; } if(!n) return reject(new Error('no audio')); resolve({sampleRate:ctx.sampleRate, mono:out}); };
+      el.onerror=()=>finish(new Error('cannot play this video')); el.onended=()=>finish();
+      try{ srcN=ctx.createMediaElementSource(el); proc=ctx.createScriptProcessor(4096,1,1); proc.onaudioprocess=ev=>{ if(!el.paused) chunks.push(new Float32Array(ev.inputBuffer.getChannelData(0))); }; sink=ctx.createGain(); sink.gain.value=0; srcN.connect(proc); proc.connect(sink); sink.connect(ctx.destination); }catch(e){ return finish(e); }
+      el.onloadedmetadata=()=>setRec('Reading '+Math.round(el.duration)+' s of video in real time, keep the page open...');
+      const p=el.play(); if(p&&p.catch) p.catch(()=>finish(new Error('playback blocked, try again')));
+    });
+  }
+  function nsdfPitch(x, sr){
+    const N=x.length, minLag=Math.floor(sr/1000), maxLag=Math.min(Math.floor(sr/60), N-2);
+    let e=0; for(let i=0;i<N;i++) e+=x[i]*x[i]; if(Math.sqrt(e/N)<0.005) return 0;
+    const nsdf=new Float32Array(maxLag+1);
+    for(let t=minLag;t<=maxLag;t++){ let acf=0,m=0; for(let i=0;i<N-t;i++){ const a=x[i],b=x[i+t]; acf+=a*b; m+=a*a+b*b; } nsdf[t]=m?2*acf/m:0; }
+    const peaks=[]; let i=minLag; while(i<=maxLag&&nsdf[i]>0) i++;
+    for(;i<maxLag;i++) if(nsdf[i]>nsdf[i-1]&&nsdf[i]>=nsdf[i+1]&&nsdf[i]>0.4) peaks.push(i);
+    if(!peaks.length) return 0; let best=0; for(const p of peaks) if(nsdf[p]>best) best=nsdf[p]; if(best<0.7) return 0;
+    const tau=peaks.find(p=>nsdf[p]>=0.9*best); const a=nsdf[tau-1],b=nsdf[tau],c=nsdf[tau+1],den=a-2*b+c; const sh=den?0.5*(a-c)/den:0; return sr/(tau+sh);
+  }
+  async function trackPitch(mono, sr){
+    const N=2048, hop=Math.round(sr*0.03); const frames=[]; const total=Math.floor((mono.length-N)/hop);
+    for(let i=0;i+N<=mono.length;i+=hop){ frames.push(nsdfPitch(mono.subarray(i,i+N),sr)); if(frames.length%400===0){ setRec('Tracking pitch... '+Math.round(100*frames.length/total)+'%'); await new Promise(r=>setTimeout(r,0)); } }
+    // median of 5
+    const out=new Float32Array(frames.length); for(let i=0;i<frames.length;i++){ const w=[]; for(let k=-2;k<=2;k++){ const v=frames[Math.max(0,Math.min(frames.length-1,i+k))]; if(v>0) w.push(v); } if(w.length>=3){ w.sort((a,b)=>a-b); out[i]=w[Math.floor(w.length/2)]; } }
+    return {frames:out, hop};
+  }
+  $('recFile').addEventListener('change', async e=>{
+    const file=e.target.files&&e.target.files[0]; if(!file) return;
+    rec.taps=[]; $('recTaps').textContent=''; $('recBuild').disabled=true; $('recSam').disabled=true; $('recListen').disabled=true;
+    try{
+      ensureCtx(); setRec('Decoding '+file.name+'...');
+      let dec; try{ const ab=await ctx.decodeAudioData(await file.arrayBuffer()); dec={sampleRate:ab.sampleRate, mono:toMono(ab)}; }catch(err){ dec=await decodeViaElement(file); }
+      rec.mono=dec.mono; rec.sr=dec.sampleRate;
+      const tp=await trackPitch(rec.mono, rec.sr); rec.frames=tp.frames; rec.hop=tp.hop;
+      const voiced=[...rec.frames].filter(v=>v>0).length;
+      setRec((rec.mono.length/rec.sr).toFixed(0)+' s loaded, pitch found in '+Math.round(100*voiced/rec.frames.length)+'% of it. Press Listen, then tap Sam on each sam.');
+      $('recListen').disabled=false;
+    }catch(err){ setRec('Could not read that file ('+(err&&err.message||err)+').'); }
+  });
+  function recStop(){ if(rec.src){ try{ rec.src.stop(); }catch(e){} rec.src=null; } $('recListen').textContent='Listen'; $('recSam').disabled=true; }
+  $('recListen').addEventListener('click',()=>{
+    if(rec.src){ recStop(); return; }
+    ensureCtx(); if(playing) stop();
+    const b=ctx.createBuffer(1, rec.mono.length, rec.sr); b.copyToChannel(rec.mono,0);
+    const src=ctx.createBufferSource(); src.buffer=b; src.connect(master); rec.t0=ctx.currentTime+0.05; src.start(rec.t0); src.onended=()=>{ if(rec.src===src) recStop(); };
+    rec.src=src; rec.taps=[]; $('recTaps').textContent=''; $('recListen').textContent='Stop'; $('recSam').disabled=false; $('recBuild').disabled=true;
+  });
+  $('recSam').addEventListener('click',()=>{
+    if(!rec.src) return; const t=ctx.currentTime-rec.t0; rec.taps.push(t);
+    const d=rec.taps.length>1?(rec.taps[rec.taps.length-1]-rec.taps[rec.taps.length-2]):0;
+    $('recTaps').textContent='Sam taps: '+rec.taps.map(x=>x.toFixed(1)).join(', ')+(d?'  (last cycle '+d.toFixed(2)+' s, '+Math.round(60*TAALS[ownTaal.value].n/d)+' per minute)':'');
+    if(rec.taps.length>=3) $('recBuild').disabled=false;
+  });
+  const NAMES=['S','r','R','g','G','m','M','P','d','D','n','N'];
+  function semiName(sm){ let o=Math.floor(sm/12); const k=((sm%12)+12)%12; let t=NAMES[k]; while(o>0){ t+="'"; o--; } while(o<0){ t+=','; o++; } return t; }
+  $('recBuild').addEventListener('click',()=>{
+    recStop();
+    const T=TAALS[ownTaal.value], n=T.n, sub=+$('recSub').value, saHz=+recSa.value;
+    const taps=rec.taps.slice().sort((a,b)=>a-b); const diffs=[]; for(let i=1;i<taps.length;i++) diffs.push(taps[i]-taps[i-1]); diffs.sort((a,b)=>a-b);
+    const cycle=diffs[Math.floor(diffs.length/2)]; const slot=cycle/(n*sub);
+    // phase: average tap offset modulo cycle, anchored on the first tap
+    let phase=taps[0]; const slotsPerCycle=n*sub;
+    const nCycles=Math.max(1, Math.floor((rec.mono.length/rec.sr - phase)/cycle));
+    const votes=Array.from({length:slotsPerCycle},()=>({}));
+    for(let c=0;c<nCycles;c++) for(let k=0;k<slotsPerCycle;k++){
+      const a=phase+c*cycle+k*slot, b=a+slot; const f0=Math.floor(a*rec.sr/rec.hop), f1=Math.floor(b*rec.sr/rec.hop);
+      for(let f=f0;f<f1&&f<rec.frames.length;f++){ const hz=rec.frames[f]; if(hz>0){ let sm=Math.round(12*Math.log2(hz/saHz)); while(sm<-12) sm+=12; while(sm>19) sm-=12; votes[k][sm]=(votes[k][sm]||0)+1; } }
+    }
+    const seq=votes.map(v=>{ let best=null,bc=0; for(const k in v){ if(v[k]>bc){ bc=v[k]; best=+k; } } return best; });
+    // smooth: a single-slot blip between two equal notes becomes that note
+    for(let k=1;k<seq.length-1;k++) if(seq[k-1]!==null && seq[k-1]===seq[k+1] && seq[k]!==seq[k-1]) seq[k]=seq[k-1];
+    const toks=[]; let prev=null;
+    for(let m=0;m<n;m++){ const parts=[]; for(let j=0;j<sub;j++){ const v=seq[m*sub+j]; if(v===null||v===prev) parts.push('-'); else { parts.push(semiName(v)); prev=v; } } 
+      // collapse "X/-" to "X" and "-/-" to "-"
+      let tok=parts.join('/'); tok=tok.replace(/(\/-)+$/,''); toks.push(tok||'-'); }
+    $('ownNotes').value=toks.join(' '); if(!$('ownName').value) $('ownName').value='From recording';
+    $('ownStatus').textContent='Sargam written from '+nCycles+' cycle'+(nCycles>1?'s':'')+' at about '+Math.round(60*n/cycle)+' per minute. Correct it, then Save and use.';
+    S.bpm=Math.max(30,Math.min(240,Math.round(60*n/cycle))); $('bpm').value=S.bpm; $('bpmV').textContent=S.bpm; save();
+  });
+
   syncSa(); renderTaal(); renderNotes();
+  if(cur().custom) loadOwn(cur());
 })();
 </script>
 </body>
