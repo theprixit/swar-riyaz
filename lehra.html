@@ -182,6 +182,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     {id:'tt-kafi', taal:'teentaal', raga:'Kafi', notes:'S R g m P m g R g R S n, S R g R'},
     {id:'tt-chandra', taal:'teentaal', raga:'Chandrakauns', notes:'S g m d N d m g m g S N, S g m g'},
     {id:'tt-bageshri', taal:'teentaal', raga:'Bageshri', notes:"S n, D, n, S m g m D n S' n D m g R"},
+    {id:'tt-bageshri-vil', taal:'teentaal', raga:'Bageshri vilambit (transcribed from the Tablavault recording)', bpm:55, notes:"S - - D,/g n, D, m,/g, m,/S n, D, m,/P, g,/R, g, m, D, n,/D,"},
     {id:'jt-bageshri', taal:'jhaptaal', raga:'Bageshri', notes:"S m g m D n S' n D m"},
     {id:'jt-kafi', taal:'jhaptaal', raga:'Kafi', notes:'S R g m P m g R S n,'},
     {id:'et-yaman', taal:'ektaal', raga:'Yaman', notes:'S R G M P M G R G R S N,'},
@@ -207,7 +208,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   function syncSa(){ let best=null,bd=1e9; [...saSel.options].forEach(o=>{ const d=Math.abs(Math.log2(o.value/S.saHz)); if(d<bd){bd=d;best=o;} }); if(best) saSel.value=best.value; $('saHz').value=S.saHz.toFixed(1); }
   saSel.addEventListener('change',()=>{ S.saHz=+saSel.value; save(); syncSa(); });
   $('saHz').addEventListener('change',()=>{ const v=+$('saHz').value; if(v>=60&&v<=600){ S.saHz=v; save(); syncSa(); } });
-  lehraSel.addEventListener('change',()=>{ S.lehra=lehraSel.value; save(); renderTaal(); renderNotes(); if(playing){ flushFuture(); nextIdx=0; nextTime=ctx.currentTime+0.03; schedule(); mediaSession(); } });
+  lehraSel.addEventListener('change',()=>{ S.lehra=lehraSel.value; const nl=cur(); if(nl.bpm){ S.bpm=nl.bpm; $('bpm').value=nl.bpm; $('bpmV').textContent=nl.bpm; $('layaName').textContent=nl.bpm<60?'vilambit':(nl.bpm<120?'madhya':'drut'); } save(); renderTaal(); renderNotes(); if(playing){ flushFuture(); nextIdx=0; nextTime=ctx.currentTime+0.03; schedule(); mediaSession(); } });
   $('bpm').value=S.bpm; $('bpmV').textContent=S.bpm;
   function retime(){ if(!playing||!ctx) return; const now=ctx.currentTime; const playingNow=sched.length?sched[sched.length-1]:null; flushFuture(); const last=sched.length?sched[sched.length-1]:null; if(last){ const T=taal(); nextIdx=(last.a-1)*T.n+last.m; nextTime=Math.max(now+0.02, last.t+60/S.bpm); } else { nextTime=now+0.03; } schedule(); }
   $('bpm').addEventListener('input',()=>{ S.bpm=+$('bpm').value; $('bpmV').textContent=S.bpm; $('layaName').textContent=S.bpm<60?'vilambit':(S.bpm<120?'madhya':'drut'); save(); retime(); });
