@@ -137,6 +137,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
       </div>
     </div>
     <div class="row" style="margin-top:10px">
+      <label class="small"><input type="checkbox" id="voiceChk" checked> Lehra melody</label>
       <label class="small"><input type="checkbox" id="droneChk" checked> Tanpura under it</label>
       <label class="small"><input type="checkbox" id="highChk"> Lehra an octave higher</label>
     </div>
@@ -155,6 +156,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
         <li>Sam (matra 1) is red. Tali matras show their count, khali shows 0. The cell outlined in brass is the matra sounding now.</li>
         <li>Start at 60 to 80 for theka. For kaida practice in dugun, keep the lehra at the same tempo and play two bols per matra; don't speed the lehra up.</li>
         <li>Tap tempo: tap the button four times on the beat and the slider follows.</li>
+        <li>Metronome: untick Lehra melody and set Clicks to Every matra. Sam is a high click, tali a mid click, khali a low soft one, plain matras quieter still. Untick Tanpura too for a dry metronome.</li>
         <li>While it plays, the screen is asked to stay awake, and the sound is routed like a music track so it should carry on with the screen locked or another app in front. On iPhone the silent switch does not mute it, but the Lock Screen's pause button will.</li>
         <li>These are simple practice lehras written for this page, one note per matra, following each raga's rules. They are not transcriptions of any recording.</li>
       </ul>
@@ -191,7 +193,7 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     {id:'dd-khamaj', taal:'dadra', raga:'Khamaj', notes:'S G m P m G'}
   ];
   const $=id=>document.getElementById(id);
-  const S={lehra:'tt-bhup', saHz:140.6, bpm:80, clicks:'sam', drone:true, high:false};
+  const S={lehra:'tt-bhup', saHz:140.6, bpm:80, clicks:'sam', drone:true, high:false, voice:true};
   try{ Object.assign(S, JSON.parse(localStorage.getItem('lehra-saath')||'{}')); }catch(e){}
   function save(){ try{ localStorage.setItem('lehra-saath', JSON.stringify(S)); }catch(e){} }
   let CUSTOM=[]; try{ CUSTOM=JSON.parse(localStorage.getItem('lehra-custom')||'[]'); }catch(e){}
@@ -215,7 +217,8 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
   $('layaName').textContent=S.bpm<60?'vilambit':(S.bpm<120?'madhya':'drut');
   $('clickSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; S.clicks=b.dataset.c; save(); [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); retime(); });
   [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x.dataset.c===S.clicks));
-  $('droneChk').checked=S.drone; $('highChk').checked=S.high;
+  $('droneChk').checked=S.drone; $('highChk').checked=S.high; $('voiceChk').checked=S.voice;
+  $('voiceChk').addEventListener('change',e=>{ S.voice=e.target.checked; if(!S.voice && S.clicks==='off'){ S.clicks='all'; [...$('clickSeg').children].forEach(x=>x.setAttribute('aria-pressed',x.dataset.c==='all')); } save(); retime(); });
   $('droneChk').addEventListener('change',e=>{ S.drone=e.target.checked; save(); if(playing){ S.drone?startDrone():stopDrone(); } });
   $('highChk').addEventListener('change',e=>{ S.high=e.target.checked; save(); retime(); });
 
@@ -306,9 +309,11 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     }catch(e){ bank=null; $('voiceLine').textContent='Voice: synth reed (harmonium samples not found).'; }
   }
   loadBank();
-  function click(t,strong){
-    const o=ctx.createOscillator(); o.type='triangle'; o.frequency.setValueAtTime(strong?1400:1000,t); o.frequency.exponentialRampToValueAtTime(strong?700:500,t+0.04);
-    const g=ctx.createGain(); g.gain.setValueAtTime(strong?0.35:0.15,t); g.gain.exponentialRampToValueAtTime(0.0001,t+(strong?0.09:0.05));
+  function click(t,kind){
+    const strong=kind==='sam'||kind===true;
+    const f={sam:1500,tali:1100,khali:700,matra:1000}[kind]||1000, v={sam:0.4,tali:0.26,khali:0.2,matra:0.13}[kind]||0.13, d={sam:0.1,tali:0.07,khali:0.07,matra:0.045}[kind]||0.045;
+    const o=ctx.createOscillator(); o.type=kind==='khali'?'sine':'triangle'; o.frequency.setValueAtTime(f,t); o.frequency.exponentialRampToValueAtTime(f/2,t+0.04);
+    const g=ctx.createGain(); g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
     o.connect(g); g.connect(master); o.start(t); o.stop(t+0.1); track(o,t);
   }
   function isTali(m){ const T=taal(); let s=1; for(let i=0;i<T.vib.length;i++){ if(m===s) return T.marks[i]!=='0'; s+=T.vib[i]; } return false; }
@@ -332,9 +337,10 @@ ul{padding-left:20px;margin:8px 0} li{margin-bottom:4px}
     const T=taal(), beat=60/S.bpm, ev=events();
     while(nextTime<ctx.currentTime+1.6){
       const m=(nextIdx%T.n)+1;
-      ev.forEach(e=>{ if(Math.floor(e.at+1e-6)===m-1){ reed(e.semi, nextTime+(e.at-(m-1))*beat, beat*e.dur, 0.22); } });
-      const strong=m===1;
-      if(S.clicks==='all' || (S.clicks==='sam'&&strong) || (S.clicks==='tali'&&isVibStart(m)&&(isTali(m)||strong))) click(nextTime,strong);
+      if(S.voice) ev.forEach(e=>{ if(Math.floor(e.at+1e-6)===m-1){ reed(e.semi, nextTime+(e.at-(m-1))*beat, beat*e.dur, 0.22); } });
+      const strong=m===1, vib=isVibStart(m);
+      const kind=strong?'sam':(vib?(isTali(m)?'tali':'khali'):'matra');
+      if(S.clicks==='all' || (S.clicks==='sam'&&strong) || (S.clicks==='tali'&&(vib||strong))) click(nextTime,kind);
       sched.push({t:nextTime,m:m,a:Math.floor(nextIdx/T.n)+1});
       nextTime+=beat; nextIdx++;
     }
